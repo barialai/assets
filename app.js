@@ -1,9 +1,11 @@
 
 'use strict';
-/* Vault is a self-contained, local-first personal ledger. No network requests. */
+/* Vault v4. Local-first ledger with an optional authenticated cloud backend. */
 (() => {
 const STORAGE_KEY = 'vault.personal.assets.v1';
 const VERSION = 2;
+const CLOUD_META_KEY = 'vault.cloud.link.v1';
+const cloud = {configured:false,signedIn:false,linked:false,user:null,owner:'',revision:0,dirty:false,generation:0,busy:false,applying:false,error:'',reconcile:null,remote:null,health:{},backups:[],backupsLoaded:false,lastSync:null,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC',timer:null,pendingMutation:null,replaceNext:false,installPrompt:null};
 const CATEGORY = {
   cash:{label:'Everyday cash / bank / wallet',short:'Cash & bank',icon:'wallet',color:'#989891'},
   forex:{label:'Forex account',short:'Forex',icon:'chart',color:'#FCFF1A'},
@@ -34,8 +36,8 @@ const round = n => Math.round((n+Number.EPSILON)*1e8)/1e8;
 const dateLabel = (date,options={month:'short',day:'numeric'}) => dateObj(date).toLocaleDateString('en-US',options);
 const today = () => localDate();
 let storageOk = true, corruptRaw = '', persistenceBlocked = false, modalDraft = null, pendingExternal = null;
-let ui = {page:['overview','cash','loans','tracker','activity','settings','backup'].includes(location.hash.slice(1))?location.hash.slice(1):'overview',assetFilter:'all',assetQuery:'',period:'30D',openMenu:null,trackerAccount:'',trackerDate:'',month:new Date(new Date().getFullYear(),new Date().getMonth(),1),activityAccount:'',activityKind:'all',activityQuery:'',activityPage:1,cashMonth:today().slice(0,7),cashAccount:'',loanFilter:'all',loanQuery:'',chartPoints:[]};
-function blankState() {return {version:VERSION,demo:false,profile:{name:'Nawab',subtitle:'Personal portfolio',photo:'',badge:true},settings:{displayCurrency:'USDT',hideBalances:false,rates:{USDT:1,USD:1},lastBackup:null},assets:[],entries:[],loans:[],loanPayments:[],snapshots:[{date:today(),value:0}],updatedAt:new Date().toISOString()};}
+let ui = {page:['overview','cash','loans','tracker','activity','settings','backup','quick','cloud'].includes(location.hash.slice(1))?location.hash.slice(1):'overview',assetFilter:'all',assetQuery:'',period:'30D',openMenu:null,trackerAccount:'',trackerDate:'',month:new Date(new Date().getFullYear(),new Date().getMonth(),1),activityAccount:'',activityKind:'all',activityQuery:'',activityPage:1,cashMonth:today().slice(0,7),cashAccount:'',loanFilter:'all',loanQuery:'',chartPoints:[]};
+function blankState() {return {version:VERSION,demo:false,profile:{name:'My workspace',subtitle:'Personal portfolio',photo:'',badge:true},settings:{displayCurrency:'USDT',hideBalances:false,rates:{USDT:1,USD:1},lastBackup:null},assets:[],entries:[],loans:[],loanPayments:[],snapshots:[{date:today(),value:0}],updatedAt:new Date().toISOString()};}
 function sampleState() {
   const s=blankState();s.demo=true;
   const rows=[
@@ -144,26 +146,26 @@ function shortMoney(n,c=state.settings.displayCurrency){if(state.settings.hideBa
 function pct(n,{signed=true}={}){if(state.settings.hideBalances)return '\u2022\u2022';if(n===null||!Number.isFinite(n))return '\u2014';return(n>0&&signed?'+':'')+numeric(n,2)+'%';}
 function tone(n){return n>0.000001?'positive':n<-.000001?'negative':'neutral';}
 function avatar(size=''){return `<span class="avatar ${size}">${state.profile.photo?`<img src="${state.profile.photo}" alt="Profile photo">`:esc(state.profile.name.trim().slice(0,1).toUpperCase()||'N')}</span>`;}
-function badge(){return `<span class="badge" title="Personal profile badge - not identity verification" aria-label="Personal profile badge"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m15 1 4 3 5-.5 1.5 5 3.5 3.5-2 4.5.5 5-5 1.5-3.5 4-4.5-2-5 .5-2-4.5-4-3.5 1.5-5L4 7l5-1.5Z" fill="#FCFF1A"/><path d="m15 3 4 3 4-.3 1 4.5 3 2.5-1.7 4 .3 4-4.5 1-2.6 3-4-1.7-4 .3-1.3-4.1-3.1-2.6 1.5-4L6 8.5l4.6-1.2Z" fill="#FCFF1A"/><path d="m9 14.8 4 3.4 7.3-9" fill="none" stroke="#0C0E09" stroke-width="3" stroke-linejoin="round"/></svg></span>`;}
+function badge(){return `<span class="badge" title="Personal profile badge - not external identity verification" aria-label="Personal profile badge"><img src="tickmark.png" alt="" width="25" height="25"></span>`;}
 function assetLogo(a,small=false){const cls=['cash','forex','crypto'].includes(a.category)?a.category:'other';let content=icon(CATEGORY[a.category].icon);if(a.logo)content=`<img src="${a.logo}" alt="${esc(a.name)} logo">`;else if(a.symbol==='BTC')content='\u20bf';else if(a.symbol==='ETH')content='<svg viewBox="0 0 24 32" width="15" height="23" aria-hidden="true"><path d="m12 0 11 18-11 6L1 18Z" fill="#d6d6d6"/><path d="m12 0 11 18-11-5Z" fill="#9a9a9a"/><path d="m1 20 11 12 11-12-11 6Z" fill="#a8a8a8"/></svg>';else if(a.symbol)content=esc(a.symbol.slice(0,2));return `<span class="asset-logo ${cls} ${small?'small':''}">${content}</span>`;}
 function totalSnapshot(){const item={date:today(),value:totals().value};const i=state.snapshots.findIndex(p=>p.date===item.date);if(i>=0)state.snapshots[i]=item;else state.snapshots.push(item);state.snapshots.sort((a,b)=>a.date.localeCompare(b.date));}
-function persist(){state.updatedAt=new Date().toISOString();if(persistenceBlocked){storageOk=false;return false;}try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));storageOk=true;return true;}catch(err){storageOk=false;return false;}}
+function persist(){state.updatedAt=new Date().toISOString();if(persistenceBlocked){storageOk=false;return false;}try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));storageOk=true;cloudLocalChanged();return true;}catch(err){storageOk=false;return false;}}
 function toast(message,error=false){const t=document.createElement('div');t.className='toast'+(error?' error':'');t.innerHTML=icon(error?'info':'check')+`<span>${esc(message)}</span>`;$('#toasts').appendChild(t);setTimeout(()=>t.remove(),error?8500:4500);}
 function commit(message,{snapshot=true}={}){if(snapshot)totalSnapshot();const saved=persist();render();if(message)toast(message+(saved?'':' Changes are not saved in this browser. Export a backup now.'),!saved);}
-function saveHeader(){const el=$('#save-status');el.classList.toggle('error',!storageOk);el.innerHTML=`<span></span> ${storageOk?'Saved on this device':'Not saved - export a backup'}`;el.title=storageOk?'Stored in this browser only. Export a backup before changing browser or clearing site data.':'Browser storage is blocked, full, or unreadable. Your latest changes exist only in this tab.';}
+function saveHeader(){const el=$('#save-status');el.classList.toggle('error',!storageOk);el.innerHTML=`<span></span> ${storageOk?'Saved on this device':'Not saved - export a backup'}`;el.title=storageOk?'Local copy saved in this browser. Check Cloud sync for server status, and keep an independent JSON backup.':'Browser storage is blocked, full, or unreadable. Your latest changes exist only in this tab.';}
 function optionsCurrencies(selected){return Object.keys(state.settings.rates).map(c=>`<option value="${esc(c)}" ${c===selected?'selected':''}>${esc(c)}</option>`).join('');}
 function render(){
-  const pages={overview:'Overview',cash:'Everyday money',loans:'Loans',tracker:'Daily tracker',activity:'Activity log',settings:'Settings',backup:'Backups'};
+  const pages={overview:'Overview',cash:'Everyday money',loans:'Loans',tracker:'Daily tracker',activity:'Activity log',settings:'Settings',backup:'Backups',quick:'Quick Update',cloud:'Cloud & daily backups'};
   $('#breadcrumb-current').textContent=pages[ui.page];saveHeader();
   $('#display-currency').innerHTML=optionsCurrencies(state.settings.displayCurrency);
   $('#sidebar-profile').innerHTML=`${avatar('small')}<span><strong>${esc(state.profile.name)}</strong><small>Personal account</small></span>${icon('chevron')}`;
   $$('.nav-item[data-page]').forEach(el=>{el.classList.toggle('active',el.dataset.page===ui.page);el.setAttribute('aria-current',el.dataset.page===ui.page?'page':'false');});
-  const main=$('#main');main.innerHTML=(ui.page==='overview'?overview():ui.page==='cash'?cashPage():ui.page==='loans'?loansPage():ui.page==='tracker'?trackerPage():ui.page==='activity'?activityPage():ui.page==='backup'?backupPage():settingsPage());
+  const main=$('#main');main.innerHTML=(ui.page==='overview'?overview():ui.page==='cash'?cashPage():ui.page==='loans'?loansPage():ui.page==='tracker'?trackerPage():ui.page==='activity'?activityPage():ui.page==='backup'?backupPage():ui.page==='quick'?quickPage():ui.page==='cloud'?cloudPage():settingsPage());
   if(ui.page==='overview')drawPortfolioChart();
-  bindSearchInputs();enhanceUI(main);updateMobileNav();
+  bindSearchInputs();enhanceUI(main);updateMobileNav();paintCloudStatus();
 }
 function setPage(page){
-  if(!['overview','cash','loans','tracker','activity','settings','backup'].includes(page))return;
+  if(!['overview','cash','loans','tracker','activity','settings','backup','quick','cloud'].includes(page))return;
   if($('#modal').open)closeModal();
   ui.page=page;ui.openMenu=null;location.hash=page;closeNav();render();window.scrollTo({top:0,behavior:'instant'});
 }
@@ -210,7 +212,7 @@ function activityFiltered(){return state.entries.filter(e=>{
 }).sort(sortEntries);}
 function activityContents(){const rows=activityFiltered(),per=15,pages=Math.max(1,Math.ceil(rows.length/per));ui.activityPage=Math.min(pages,ui.activityPage);return ledgerTable(rows.slice((ui.activityPage-1)*per,ui.activityPage*per),{emptyMessage:'Your money in, spending, transfers, loan movements and investment results will appear here.'})+`<div class="table-footer"><span>${rows.length} ledger ${rows.length===1?'entry':'entries'}</span><div class="pagination"><button class="btn btn-ghost btn-small" data-action="activity-page" data-delta="-1" ${ui.activityPage===1?'disabled':''}>Previous</button><span>${ui.activityPage} / ${pages}</span><button class="btn btn-ghost btn-small" data-action="activity-page" data-delta="1" ${ui.activityPage===pages?'disabled':''}>Next</button></div></div>`;}
 function activityPage(){return `${demoBanner()}<div class="page-heading"><div><h1>Activity log</h1><p>A complete record of changes to your accounts.</p></div><div class="section-actions"><button class="btn btn-secondary" data-action="export-csv">${icon('download')}Export CSV</button><button class="btn btn-primary" data-action="entry">${icon('plus')}Add entry</button></div></div><section class="panel"><div class="filter-row"><select class="input" id="activity-account" aria-label="Filter activity by account"><option value="">All accounts</option>${accountOptions(ui.activityAccount,false)}</select><select class="input" id="activity-kind" aria-label="Filter activity by type">${[['all','All activity'],['pnl','Profits & losses'],['capital','Cash movements'],['loans','Loan movements'],['updates','Value / capital updates']].map(([k,v])=>`<option value="${k}" ${k===ui.activityKind?'selected':''}>${v}</option>`).join('')}</select><label class="search-field">${icon('search')}<input type="search" id="activity-search" placeholder="Search notes or accounts..." value="${esc(ui.activityQuery)}" aria-label="Search activity"></label></div><div id="activity-content">${activityContents()}</div></section><div class="inline-note" style="margin:18px 0 25px">${icon('info')}<span>Deleting an entry reverses its effect on the balance and capital. A transfer's two linked entries are always removed together. Entry amounts use the exchange rate saved when they were recorded.</span></div>`;}
-function settingsPage(){return `<div class="page-heading"><div><h1>Your workspace, your way.</h1><p>Profile, currencies and a safe copy of your records.</p></div></div><div class="settings-grid"><div class="settings-stack"><section class="panel settings-panel"><h3>Profile &amp; appearance</h3><p>Make this personal. Your profile stays on this device.</p><div class="settings-profile">${avatar('large')}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><p>${esc(state.profile.subtitle)}</p><button class="btn btn-secondary btn-small" data-action="profile">${icon('edit')}Edit profile</button></div></div><div class="toggle-row"><div><strong>Show profile badge</strong><p>A personal display badge only. It does not represent identity or financial verification.</p></div><label class="toggle"><input id="setting-badge" type="checkbox" ${state.profile.badge?'checked':''} aria-label="Show profile badge"><span class="toggle-track"></span></label></div><div class="toggle-row"><div><strong>Hide balances</strong><p>Conceal amounts on the dashboard. Forms and backups still contain your real values.</p></div><label class="toggle"><input id="setting-hide" type="checkbox" ${state.settings.hideBalances?'checked':''} aria-label="Hide balances"><span class="toggle-track"></span></label></div><div class="field" style="border-top:1px solid #303030;padding-top:18px"><label for="setting-display">Display currency</label><select id="setting-display" class="input">${optionsCurrencies(state.settings.displayCurrency)}</select><p class="field-help">Cards and reports use this currency. Your headline total always remains in USDT.</p></div></section><section class="panel settings-panel" id="backup-section"><h3>Backup &amp; restore</h3><p>Keep a complete copy of your workspace and continue on another device.</p><div class="inline-note">${icon('shield')}<span>JSON backups include your accounts, loans, repayments, photos and settings. Keep these unencrypted files private.</span></div><div class="settings-actions"><button class="btn btn-primary" data-action="open-backup">${icon('folder')}Open backup center</button><button class="btn btn-secondary" data-action="import">${icon('upload')}Restore backup</button></div><p class="field-help" style="margin-top:17px">Last backup prepared: ${state.settings.lastBackup?esc(formatStamp(state.settings.lastBackup)):'Not yet'}</p></section></div><div class="settings-stack"><section class="panel settings-panel"><h3>Currency conversions</h3><p>Set how much <strong>1 unit</strong> of a currency is worth in USDT. These rates are manual, not live.</p><form id="rates-form"><div class="rate-row"><div><strong>USDT</strong><small>Base currency</small></div><input class="input" value="1" disabled aria-label="USDT base exchange rate"><span></span></div>${Object.entries(state.settings.rates).filter(([c])=>c!=='USDT').map(([c,r])=>`<div class="rate-row"><div><strong>${esc(c)}</strong><small>1 ${esc(c)} = ${esc(r)} USDT</small></div><input class="input" type="number" min="0.000000000001" max="1000000000000" step="any" required value="${r}" data-rate="${esc(c)}" aria-label="USDT value of one ${esc(c)}"><button type="button" class="icon-button" data-action="delete-currency" data-currency="${esc(c)}" aria-label="Remove ${esc(c)}">${icon('trash')}</button></div>`).join('')}<div class="settings-actions"><button class="btn btn-primary btn-small" type="submit">${icon('check')}Save rates</button><button class="btn btn-secondary btn-small" type="button" data-action="add-currency">${icon('plus')}Add currency</button></div></form><p class="field-help" style="margin-top:16px">The initial USD rate assumes 1 USD = 1 USDT for convenience. It is not a live quote or a guaranteed peg. Replace it with your chosen valuation rate.</p></section><section class="panel settings-panel"><h3>How your totals work</h3><div class="about-copy"><p><strong>Total value</strong> is the current value of every included asset, converted into USDT.</p><p><strong>Investment profit / loss</strong> is investment value minus net contributions. Cash accounts, everyday income, spending and loan movements are excluded.</p><p><strong>Net worth</strong> = included cash and investments + outstanding money owed to you - outstanding loans you owe. Loans use recorded principal, not expected interest or a guarantee of recovery.</p><p><strong>Cash accounts</strong> show available money, not investment return. The money-in/out report excludes transfers, balance corrections and loan movements.</p><p><strong>Percentage return</strong> is gain divided by contributed capital. It is a simple accounting return, not a time-weighted or tax calculation.</p><p><strong>Prop and demo balances</strong> are excluded by default. They are not automatically your personal assets. Track real, received payouts separately.</p><p><strong>Charts</strong> use saved valuations and manually logged results. No market data, exchange connection or background price updating is included.</p></div></section><section class="panel settings-panel"><h3>Workspace data</h3><p>${state.assets.length} assets &middot; ${state.entries.length} ledger entries &middot; ${state.loans.length} loans &middot; ${state.snapshots.length} valuation snapshots</p><div class="settings-actions"><button class="btn btn-secondary btn-small" data-action="load-demo">Load sample data</button><button class="btn btn-danger btn-small" data-action="start-fresh">${icon('trash')}Clear workspace</button></div></section></div></div>`;}
+function settingsPage(){return `<div class="page-heading"><div><h1>Your workspace, your way.</h1><p>Profile, currencies and a safe copy of your records.</p></div></div><div class="settings-grid"><div class="settings-stack"><section class="panel settings-panel"><h3>Profile &amp; appearance</h3><p>Make this personal. Your profile is saved here and included when you connect cloud sync.</p><div class="settings-profile">${avatar('large')}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><p>${esc(state.profile.subtitle)}</p><button class="btn btn-secondary btn-small" data-action="profile">${icon('edit')}Edit profile</button></div></div><div class="toggle-row"><div><strong>Show profile badge</strong><p>A personal display badge only. It does not represent identity or financial verification.</p></div><label class="toggle"><input id="setting-badge" type="checkbox" ${state.profile.badge?'checked':''} aria-label="Show profile badge"><span class="toggle-track"></span></label></div><div class="toggle-row"><div><strong>Hide balances</strong><p>Conceal amounts on the dashboard. Forms and backups still contain your real values.</p></div><label class="toggle"><input id="setting-hide" type="checkbox" ${state.settings.hideBalances?'checked':''} aria-label="Hide balances"><span class="toggle-track"></span></label></div><div class="field" style="border-top:1px solid #303030;padding-top:18px"><label for="setting-display">Display currency</label><select id="setting-display" class="input">${optionsCurrencies(state.settings.displayCurrency)}</select><p class="field-help">Cards and reports use this currency. Your headline total always remains in USDT.</p></div></section><section class="panel settings-panel" id="backup-section"><h3>Backup &amp; restore</h3><p>Keep a complete copy of your workspace and continue on another device.</p><div class="inline-note">${icon('shield')}<span>JSON backups include your accounts, loans, repayments, photos and settings. Keep these unencrypted files private.</span></div><div class="settings-actions"><button class="btn btn-primary" data-action="open-backup">${icon('folder')}Open backup center</button><button class="btn btn-secondary" data-action="import">${icon('upload')}Restore backup</button></div><p class="field-help" style="margin-top:17px">Last backup prepared: ${state.settings.lastBackup?esc(formatStamp(state.settings.lastBackup)):'Not yet'}</p></section></div><div class="settings-stack"><section class="panel settings-panel"><h3>Currency conversions</h3><p>Set how much <strong>1 unit</strong> of a currency is worth in USDT. These rates are manual, not live.</p><form id="rates-form"><div class="rate-row"><div><strong>USDT</strong><small>Base currency</small></div><input class="input" value="1" disabled aria-label="USDT base exchange rate"><span></span></div>${Object.entries(state.settings.rates).filter(([c])=>c!=='USDT').map(([c,r])=>`<div class="rate-row"><div><strong>${esc(c)}</strong><small>1 ${esc(c)} = ${esc(r)} USDT</small></div><input class="input" type="number" min="0.000000000001" max="1000000000000" step="any" required value="${r}" data-rate="${esc(c)}" aria-label="USDT value of one ${esc(c)}"><button type="button" class="icon-button" data-action="delete-currency" data-currency="${esc(c)}" aria-label="Remove ${esc(c)}">${icon('trash')}</button></div>`).join('')}<div class="settings-actions"><button class="btn btn-primary btn-small" type="submit">${icon('check')}Save rates</button><button class="btn btn-secondary btn-small" type="button" data-action="add-currency">${icon('plus')}Add currency</button></div></form><p class="field-help" style="margin-top:16px">The initial USD rate assumes 1 USD = 1 USDT for convenience. It is not a live quote or a guaranteed peg. Replace it with your chosen valuation rate.</p></section><section class="panel settings-panel"><h3>How your totals work</h3><div class="about-copy"><p><strong>Total value</strong> is the current value of every included asset, converted into USDT.</p><p><strong>Investment profit / loss</strong> is investment value minus net contributions. Cash accounts, everyday income, spending and loan movements are excluded.</p><p><strong>Net worth</strong> = included cash and investments + outstanding money owed to you - outstanding loans you owe. Loans use recorded principal, not expected interest or a guarantee of recovery.</p><p><strong>Cash accounts</strong> show available money, not investment return. The money-in/out report excludes transfers, balance corrections and loan movements.</p><p><strong>Percentage return</strong> is gain divided by contributed capital. It is a simple accounting return, not a time-weighted or tax calculation.</p><p><strong>Prop and demo balances</strong> are excluded by default. They are not automatically your personal assets. Track real, received payouts separately.</p><p><strong>Charts</strong> use saved valuations and manually logged results. No market data, exchange connection or background price updating is included.</p></div></section><section class="panel settings-panel"><h3>Workspace data</h3><p>${state.assets.length} assets &middot; ${state.entries.length} ledger entries &middot; ${state.loans.length} loans &middot; ${state.snapshots.length} valuation snapshots</p><div class="settings-actions"><button class="btn btn-secondary btn-small" data-action="load-demo">Load sample data</button><button class="btn btn-danger btn-small" data-action="start-fresh">${icon('trash')}Clear workspace</button></div></section></div></div>`;}
 function bindSearchInputs(){const l=$('#loan-search');if(l)l.addEventListener('input',e=>{ui.loanQuery=e.target.value;$('#loan-list').innerHTML=loanCards();});const s=$('#asset-search');if(s)s.addEventListener('input',e=>{ui.assetQuery=e.target.value;ui.openMenu=null;$('#asset-grid').innerHTML=assetCards();});const a=$('#activity-search');if(a)a.addEventListener('input',e=>{ui.activityQuery=e.target.value;ui.activityPage=1;$('#activity-content').innerHTML=activityContents();});}
 function modalHeader(title,description=''){return `<div class="modal-header"><div><h2>${title}</h2>${description?`<p>${description}</p>`:''}</div><button class="icon-button" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button></div>`;}
 function showModal(html,narrow=false){
@@ -326,6 +328,7 @@ async function importBackup(file){
 }
 function closeNav(){$('#sidebar').classList.remove('open');$('#sidebar-scrim').classList.remove('open');}
 function handleAction(action,el){
+  if(handleCloudQuickAction(action,el))return;
   if(handleUpgradeAction(action,el))return;
   if(handleMoneyAction(action,el))return;
   if(action==='open-nav'){$('#sidebar').classList.add('open');$('#sidebar-scrim').classList.add('open');return;}
@@ -361,7 +364,7 @@ function handleAction(action,el){
   if(action==='add-currency'){openCurrency();return;}
   if(action==='delete-currency'){const c=el.dataset.currency;if(c==='USDT')return;if(state.assets.some(a=>a.currency===c)||state.loans.some(l=>l.currency===c)){toast('This currency is used by an account or loan and cannot be removed.',true);return;}confirmAction('Remove '+esc(c)+'?','<p>No accounts or loans use this currency. Its manual conversion rate will be removed.</p>','Remove currency',()=>{delete state.settings.rates[c];if(state.settings.displayCurrency===c)state.settings.displayCurrency='USDT';closeModal();commit('Currency removed.',{snapshot:false});});return;}
   if(action==='returns-help'){infoModal('Understanding your returns','<p><strong>Gain / loss = current value - net contributed capital.</strong> Withdrawals reduce net contributed capital, so withdrawing money is not treated as a loss.</p><p>For each asset, percentage return divides gain by opening capital plus later deposits and transfers in. The headline investment return excludes everyday cash accounts and divides investment gain by the sum of their contributed capital. Transfers between investments may count again in that denominator; this is not a time-weighted return.</p><p>Cash and excluded assets are left out of the comparison chart. A percentage is unavailable when contributed capital is zero.</p><p>Conversions use your saved manual rates. These are simple bookkeeping comparisons, not time-weighted, tax or audited performance calculations.</p>');return;}
-  if(action==='help'){infoModal('A clear view of your assets','<p><strong>1. Start with your own data.</strong> Remove the labeled sample workspace, then add your cash, trading accounts and investments.</p><p><strong>2. Choose the right account type.</strong> For Binance cash and bank accounts, choose Everyday cash / bank / wallet and enter only the available balance. For investments, enter initial capital and current value.</p><p><strong>3. Keep it current.</strong> Use Money in / Money out for cash, Profit / Loss for investments and Transfer between your own tracked accounts. Use Loans to track borrowing, lending and principal repayments. Link a cash account only when that movement is not already included in its balance.</p><p><strong>4. Keep a backup.</strong> Your data stays in this browser. Open Backup &amp; restore to download a complete JSON backup. On another device, open the website, upload the file, review it and confirm. This is a manual transfer, not cloud sync. Restore replaces that browser\'s workspace. Clearing browser storage removes local records.</p><p>There are no live prices or exchange connections. This dashboard does not ask for credentials, bank details or crypto keys. The gold badge is decorative, not external verification.</p>');return;}
+  if(action==='help'){infoModal('A clear view of your assets','<p><strong>1. Start with your own data.</strong> Remove the labeled sample workspace, then add your cash, trading accounts and investments.</p><p><strong>2. Choose the right account type.</strong> For Binance cash and bank accounts, choose Everyday cash / bank / wallet and enter only the available balance. For investments, enter initial capital and current value.</p><p><strong>3. Keep it current.</strong> Use Money in / Money out for cash, Profit / Loss for investments and Transfer between your own tracked accounts. Use Loans to track borrowing, lending and principal repayments. Link a cash account only when that movement is not already included in its balance.</p><p><strong>4. Keep a backup.</strong> Keep an independent JSON copy through Backup &amp; restore. Cloud sync can also carry your workspace between devices after you configure the backend and sign in. To move a JSON copy, open the website on the other device, upload the file, review it and confirm. This is a manual transfer, not cloud sync. Restore replaces that browser\'s workspace. Clearing browser storage removes local records.</p><p>There are no live prices or exchange connections. This dashboard does not ask for credentials, bank details or crypto keys. The gold badge is decorative, not external verification.</p>');return;}
 }
 /* Everyday-money and loan bookkeeping. No live rates, automatic interest, or bank access. */
 function cashCategories(kind){return kind==='income'?['Other income','Salary','Freelance / business','Gift received','Refund']:['Other spending','Shopping','Food & groceries','Family & friends','Rent & bills','Travel & transport','Health','Fees'];}
@@ -532,7 +535,7 @@ function transferableState(){
 function backupPage(){
   const recovery=getRecovery(),photos=(state.profile.photo?1:0)+state.assets.filter(a=>a.logo).length;
   const canShare=typeof navigator.share==='function'&&typeof navigator.canShare==='function';
-  return `${demoBanner()}<div class="backup-hero"><div><div class="eyebrow">YOUR WORKSPACE, WITH YOU</div><h1>Pick up where<br>you left off.</h1><p>One file keeps your whole workspace together. Download it here, restore it on another device, and continue with the same accounts and history.</p></div><div class="backup-hero-icon">${icon('folder')}</div></div>
+  return `${demoBanner()}<div class="cloud-shortcut-banner"><div><strong>Automatic daily backups &amp; device sync</strong><p>Connect a private cloud workspace to keep server-side copies while this browser is closed.</p></div><button class="btn btn-primary" data-page="cloud">${icon('globe')}Cloud &amp; daily backups</button></div><div class="backup-hero"><div><div class="eyebrow">YOUR WORKSPACE, WITH YOU</div><h1>Pick up where<br>you left off.</h1><p>One file keeps your whole workspace together. Download it here, restore it on another device, and continue with the same accounts and history.</p></div><div class="backup-hero-icon">${icon('folder')}</div></div>
   <div class="backup-status-strip"><span>${icon(storageOk?'shield':'info')}<strong>${storageOk?'Saved in this browser':'Browser storage needs attention'}</strong></span><span>${icon('clock')}Last backup prepared: <strong>${state.settings.lastBackup?esc(formatStamp(state.settings.lastBackup)):'Not yet'}</strong></span></div>
   ${recovery?`<div class="backup-undo"><div><strong>A pre-restore copy is available</strong><p>Saved in this browser on ${esc(formatStamp(recovery.savedAt))}. Review it before replacing anything.</p></div><button class="btn btn-secondary" data-action="review-recovery">${icon('clock')}Review previous workspace</button></div>`:''}
   ${corruptRaw?`<div class="inline-note warning" style="margin-bottom:20px">${icon('info')}<span>Your earlier browser data could not be read. It has not been overwritten. <button class="text-link" data-action="recovery">Download the recovery copy</button> before restoring a different file.</span></div>`:''}
@@ -543,14 +546,14 @@ function backupPage(){
     </section>
     <section class="backup-card"><div class="backup-card-label"><span class="backup-icon">${icon('upload')}</span><span class="backup-step-label">02 / CONTINUE ANYWHERE</span></div><h2>Restore your workspace</h2><p>Choose the latest backup from your phone or computer. Review the file before replacing this browser's workspace.</p>
       <button class="backup-drop" data-action="import" data-backup-drop aria-label="Choose a JSON backup to restore">${icon('folder')}<strong>Choose your backup file</strong><span>Tap to browse, or drop a .json file here</span><span>Vault v1 / v2 &middot; Up to 12 MB</span></button>
-      <div class="backup-card-bottom"><button class="btn btn-secondary" data-action="import">${icon('upload')}Upload &amp; review backup</button><p class="backup-file-caption">Read locally. No bank connection or server upload.<br>Nothing changes until you confirm the restore.</p></div>
+      <div class="backup-card-bottom"><button class="btn btn-secondary" data-action="import">${icon('upload')}Upload &amp; review backup</button><p class="backup-file-caption">Read locally first. A linked cloud workspace syncs after you confirm.<br>Nothing changes until you confirm the restore.</p></div>
     </section>
   </div>
   <div class="backup-bottom-grid"><section class="panel"><h3>From your computer to your phone.</h3><p>The same process works in either direction.</p><div class="backup-how">
       <div class="backup-how-step"><span>1</span><div><strong>Download the latest backup</strong><p>Finish saving any open form, then download your workspace from this page.</p></div></div>
       <div class="backup-how-step"><span>2</span><div><strong>Move the file privately</strong><p>Use your own Files folder, private cloud storage or a direct device transfer. The file contains your financial records.</p></div></div>
       <div class="backup-how-step"><span>3</span><div><strong>Open Vault, then restore</strong><p>On the other device, open this website in a browser, go to Backups, choose the file and confirm. Your profile and history come back too.</p></div></div>
-    </div></section><section class="panel"><h3>Your data stays yours.</h3><p>Saving in the browser and downloading a backup are different things. Keep both.</p><div class="backup-tools"><button class="btn btn-secondary" data-action="export-csv">${icon('download')}Export account activity as CSV</button><button class="btn btn-secondary" data-action="export-loans">${icon('download')}Export loans as CSV</button></div><p class="field-help">CSV files are reports only. Use the full JSON backup to restore a workspace.</p><div class="backup-caution"><strong>No automatic cloud sync.</strong> Restore replaces this browser's records; it does not merge two devices. Download a fresh backup after making changes, and restore that file before continuing elsewhere.<br><br><strong>Backups are not encrypted.</strong> Keep them private. Clearing browser data removes local records and any local pre-restore copy, but not files you have saved separately.</div></section></div>`;
+    </div></section><section class="panel"><h3>Your data stays yours.</h3><p>Saving in the browser and downloading a backup are different things. Keep both.</p><div class="backup-tools"><button class="btn btn-secondary" data-action="export-csv">${icon('download')}Export account activity as CSV</button><button class="btn btn-secondary" data-action="export-loans">${icon('download')}Export loans as CSV</button></div><p class="field-help">CSV files are reports only. Use the full JSON backup to restore a workspace.</p><div class="backup-caution"><strong>File restore is a replacement, not a merge.</strong> Without cloud sync, move a fresh JSON backup between devices. With cloud sync linked, a confirmed restore also replaces the cloud workspace after syncing.<br><br><strong>Backups are not encrypted.</strong> Keep them private. Clearing browser data removes local records and any local pre-restore copy, but not files you have saved separately.</div></section></div>`;
 }
 function restorePreview(incoming,filename,bytes,isRecovery=false){
   closeDatePicker(false);
@@ -564,7 +567,7 @@ function restorePreview(incoming,filename,bytes,isRecovery=false){
     <div class="restore-counts"><div><strong>${incoming.assets.length}</strong><span>Accounts</span></div><div><strong>${incoming.entries.length}</strong><span>Transactions</span></div><div><strong>${incoming.loans.length}</strong><span>Loans</span></div><div><strong>${incoming.loanPayments.length}</strong><span>Repayments</span></div></div>
     <div class="restore-details"><span>${icon('check')}${imageCount} saved ${imageCount===1?'image':'images'}</span><span>${icon('check')}${incoming.snapshots.length} valuation ${incoming.snapshots.length===1?'snapshot':'snapshots'}</span><span>${icon('check')}Profile &amp; currency settings</span></div>
     ${older?'<div class="inline-note warning" style="margin-bottom:17px">'+icon('clock')+'<span>This file is older than the workspace currently open. Changes made after this backup will not be in the restored version.</span></div>':''}
-    <p class="restore-warning"><strong>This replaces the workspace in this browser. It does not merge records.</strong><br>${state.demo?'Your sample data will be replaced.':`Current workspace: ${state.assets.length} accounts, ${state.entries.length} transactions, ${state.loans.length} loans and ${state.loanPayments.length} repayments.`} Other devices are not changed.</p>
+    <p class="restore-warning"><strong>This replaces the workspace in this browser. It does not merge records.</strong><br>${state.demo?'Your sample data will be replaced.':`Current workspace: ${state.assets.length} accounts, ${state.entries.length} transactions, ${state.loans.length} loans and ${state.loanPayments.length} repayments.`} ${cloud.linked?'Cloud sync will also replace the cloud workspace; a server recovery snapshot is kept.':'Other devices are not changed unless you later upload this workspace.'}</p>
     ${keepable?'<div class="restore-save-current"><label class="checkbox-line"><input type="checkbox" id="restore-keep-copy" checked><span>Keep a local pre-restore copy of my current workspace.</span></label><p>This provides one-step recovery on this browser only. Download your current backup for a separate, portable copy.</p></div>':''}
     <label class="checkbox-line"><input type="checkbox" id="restore-confirm"><span>I understand that these records will replace the current workspace.</span></label></div>
     <div class="modal-footer restore-footer"><button class="btn btn-secondary btn-small" data-action="export" ${persistenceBlocked?'disabled':''}>${icon('download')}Download current first</button><div><button class="btn btn-secondary" data-action="close-modal">Cancel</button><button class="btn btn-primary" id="restore-apply" data-action="apply-restore" disabled>${icon('check')}Restore workspace</button></div></div>`);
@@ -587,6 +590,7 @@ function applyRestore(){
     localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
   }catch(err){return formError('Restore stopped: this browser could not save the workspace. Your current records are unchanged. Download the current backup, then free browser storage or use a regular browser window. If only the extra recovery copy is too large, uncheck it after downloading your current backup.');}
   state=next;storageOk=true;persistenceBlocked=false;corruptRaw='';pendingExternal=null;resetFilters();
+  cloud.replaceNext=true;cloudLocalChanged();
   closeModal();setPage('overview');
   toast('Workspace restored. Your saved accounts, loans, pictures and history are ready.');
 }
@@ -608,13 +612,13 @@ function mobileMore(){
   showModal(`${modalHeader('Your workspace','Everything else, close at hand.')}<div class="modal-body"><div class="more-profile">${avatar()}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><small>${esc(state.profile.subtitle)}</small></div></div><div class="more-menu">
     <button data-action="profile">${icon('user')}<span>Edit profile<small>Your name, photo and badge</small></span>${icon('chevron')}</button>
     <button data-page="backup">${icon('folder')}<span>Backup &amp; restore<small>Move your workspace between devices</small></span>${icon('chevron')}</button>
-    <button data-page="activity">${icon('clock')}<span>Activity log<small>All account transactions</small></span>${icon('chevron')}</button>
+    <button data-page="quick">${icon('bolt')}<span>Quick Update<small>Fast entries, the same full workspace</small></span>${icon('chevron')}</button><button data-page="tracker">${icon('chart')}<span>Daily tracker<small>All your trading results</small></span>${icon('chevron')}</button><button data-page="cloud">${icon('globe')}<span>Cloud &amp; daily backups<small>Private sync and daily snapshots</small></span>${icon('chevron')}</button><button data-action="install-help">${icon('phone')}<span>Phone shortcut<small>Add Quick Update to your home screen</small></span>${icon('chevron')}</button><button data-page="activity">${icon('clock')}<span>Activity log<small>All account transactions</small></span>${icon('chevron')}</button>
     <button data-page="settings">${icon('settings')}<span>Settings<small>Currencies, privacy and workspace</small></span>${icon('chevron')}</button>
     <button data-action="help">${icon('info')}<span>How it works</span>${icon('chevron')}</button></div></div>` ,true);
 }
 function updateMobileNav(){
   $$('.mobile-tab[data-page]').forEach(b=>{const active=b.dataset.page===ui.page;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
-  const more=$('#mobile-more');if(more){const active=['activity','settings','backup'].includes(ui.page);more.classList.toggle('active',active);more.setAttribute('aria-current',active?'page':'false');}
+  const more=$('#mobile-more');if(more){const active=['activity','settings','backup','cloud','tracker'].includes(ui.page);more.classList.toggle('active',active);more.setAttribute('aria-current',active?'page':'false');}
   const nav=$('.nav-item[data-action="open-backup"]');if(nav){nav.classList.toggle('active',ui.page==='backup');nav.setAttribute('aria-current',ui.page==='backup'?'page':'false');}
 }
 function handleUpgradeAction(action,el){
@@ -827,7 +831,9 @@ document.addEventListener('change',event=>{const t=event.target,id=t.id;
   else if(id==='import-file'){importBackup(t.files[0]);t.value='';}
 });
 document.addEventListener('submit',event=>{event.preventDefault();if(pendingExternal){formError('Another tab changed this workspace. Close this form, then reopen it with the latest data.');return;}const form=event.target;if(!form.reportValidity())return;
-  if(form.id==='asset-form')saveAsset();
+  if(form.id==='cloud-login-form')signInCloud();
+  else if(form.id==='quick-balance-form')saveQuickBalance();
+  else if(form.id==='asset-form')saveAsset();
   else if(form.id==='entry-form')saveEntry();
   else if(form.id==='loan-form')saveLoan();
   else if(form.id==='repayment-form')saveLoanPayment();
@@ -837,10 +843,275 @@ document.addEventListener('submit',event=>{event.preventDefault();if(pendingExte
 });
 $('#modal').addEventListener('click',event=>{if(event.target===$('#modal')){const r=$('#modal').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeModal();}});
 $('#modal').addEventListener('close',()=>{modalDraft=null;if(pendingExternal){state=pendingExternal;pendingExternal=null;resetFilters();render();toast('Latest workspace loaded from the other tab.');}});
-window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(['overview','cash','loans','tracker','activity','settings','backup'].includes(p)&&ui.page!==p){ui.page=p;render();}});
+window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(['overview','cash','loans','tracker','activity','settings','backup','quick','cloud'].includes(p)&&ui.page!==p){ui.page=p;render();}});
 window.addEventListener('beforeunload',event=>{if(!storageOk){event.preventDefault();event.returnValue='Unsaved changes. Export a backup before leaving.';}});
 window.addEventListener('storage',event=>{if(event.key!==STORAGE_KEY||!event.newValue)return;try{const updated=validateState(JSON.parse(event.newValue));if($('#modal').open){pendingExternal=updated;formError('This workspace changed in another tab. Close this form to load the latest version.');toast('Another tab updated this workspace. Close this form before continuing.',true);return;}state=updated;render();toast('Workspace updated from another tab.');}catch(err){toast('Another tab changed the saved data, but it could not be read.',true);}});
+// v4: optional private cloud, real backend snapshots, and a phone-first shortcut.
+function cloudStatusText(){
+  if(cloud.busy)return 'Syncing...';
+  if(cloud.reconcile)return 'Review device copies';
+  if(cloud.error)return 'Sync needs attention';
+  if(!cloud.configured)return 'Local only';
+  if(!cloud.signedIn)return 'Sign in to sync';
+  if(!cloud.linked)return 'Choose your workspace';
+  if(cloud.dirty)return navigator.onLine?'Changes waiting to sync':'Offline - saved here';
+  return 'Cloud up to date';
+}
+function paintCloudStatus(){
+  $$('[data-cloud-status]').forEach(el=>{el.textContent=cloudStatusText();el.closest('button')?.classList.toggle('needs-attention',Boolean(cloud.error||cloud.reconcile));});
+  const note=$('#local-card-copy');if(note)note.innerHTML=cloud.linked&&cloud.signedIn?'Saved here. Sync connected.<br>Check daily backup status.':'Saved on this device.<br>Cloud sync is optional.';
+}
+function saveCloudMeta(){
+  try{localStorage.setItem(CLOUD_META_KEY,JSON.stringify({owner:cloud.user?.id||cloud.owner||'',revision:cloud.revision,dirty:cloud.dirty,lastSync:cloud.lastSync,timezone:cloud.timezone}));}catch{}
+}
+function cloudLocalChanged(){
+  if(cloud.applying)return;
+  cloud.generation++;cloud.dirty=true;
+  if(cloud.owner||cloud.user?.id)saveCloudMeta();
+  clearTimeout(cloud.timer);cloud.timer=setTimeout(()=>syncCloud(),850);paintCloudStatus();
+}
+async function cloudRequest(action,method='GET',body){
+  if(location.protocol==='file:')throw Error('Open the deployed HTTPS website to use cloud sync.');
+  const response=await fetch('./api/vault?action='+action,{method,credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Vault-Request':'1'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(26000)});
+  let result;try{result=await response.json();}catch{throw Error('The backend is not available on this address. Deploy the complete Vercel package.');}
+  if(!response.ok){const error=Error(result.error||'Cloud request failed. Your local data is unchanged.');error.status=response.status;throw error;}
+  return result;
+}
+function cloudError(error){
+  cloud.error=error.message||'Connection unavailable. Your changes remain on this device.';
+  if(error.status===401){cloud.signedIn=false;cloud.linked=false;}
+  paintCloudStatus();
+}
+function stableRecord(s){
+  // JSONB reorders object keys; compare their meaning, not their string order.
+  const normalize=x=>Array.isArray(x)?x.map(normalize):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,normalize(x[k])])):x;
+  const copy=structuredClone(s);delete copy.updatedAt;if(copy.settings)delete copy.settings.lastBackup;
+  return JSON.stringify(normalize(copy));
+}
+function adoptCloud(workspace){
+  const next=validateState(workspace.data);
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));}
+  catch{throw Error('This browser cannot save the cloud workspace. Export your current records and free some browser storage first.');}
+  cloud.applying=true;state=next;storageOk=true;persistenceBlocked=false;corruptRaw='';pendingExternal=null;
+  cloud.revision=workspace.revision;cloud.timezone=workspace.timezone||cloud.timezone;cloud.owner=cloud.user.id;cloud.linked=true;cloud.dirty=false;cloud.lastSync=workspace.updated_at;cloud.reconcile=null;cloud.error='';cloud.pendingMutation=null;cloud.applying=false;saveCloudMeta();resetFilters();render();
+}
+async function getCloudWorkspace({initial=false}={}){
+  const result=await cloudRequest('workspace');cloud.health=result.status||{};
+  const remote=result.workspace;
+  if(!remote){cloud.remote=null;cloud.linked=false;cloud.revision=0;cloud.reconcile={remote:null,initial:true};return;}
+  remote.data=validateState(remote.data);cloud.remote=remote;
+  if(!cloud.linked || cloud.owner!==cloud.user.id){cloud.reconcile={remote,initial:true};return;}
+  if(cloud.dirty){
+    if(remote.revision!==cloud.revision){
+      // A network response may have been lost after the server committed it.
+      if(!$('#modal').open&&stableRecord(state)===stableRecord(remote.data)){adoptCloud(remote);return;}
+      cloud.reconcile={remote,initial:false};
+    }
+    return;
+  }
+  if(remote.revision!==cloud.revision || initial){
+    if($('#modal').open){cloud.reconcile={remote,initial:false};return;}
+    adoptCloud(remote);
+  }
+}
+async function initCloud(){
+  try{
+    const raw=localStorage.getItem(CLOUD_META_KEY);if(raw){const m=JSON.parse(raw);cloud.owner=typeof m.owner==='string'?m.owner:'';cloud.revision=Number.isSafeInteger(m.revision)?m.revision:0;cloud.dirty=Boolean(m.dirty);cloud.lastSync=m.lastSync||null;cloud.timezone=m.timezone||cloud.timezone;}
+    if(location.protocol==='file:'){paintCloudStatus();return;}
+    const session=await cloudRequest('session');cloud.configured=session.configured;cloud.signedIn=session.authenticated;cloud.user=session.user||null;
+    if(session.authenticated){cloud.linked=cloud.owner===session.user.id&&cloud.revision>0;await getCloudWorkspace({initial:true});if(cloud.dirty&&!cloud.reconcile)syncCloud();}
+  }catch(e){cloud.error='Cloud unavailable. Local tools are still available.';}
+  paintCloudStatus();if(ui.page==='cloud')render();
+}
+async function signInCloud(){
+  const form=$('#cloud-login-form'),button=$('button[type=submit]',form);if(!form.reportValidity())return;
+  button.disabled=true;$('#cloud-login-error').textContent='';
+  try{
+    const result=await cloudRequest('login','POST',{email:$('#cloud-email').value.trim(),password:$('#cloud-password').value});
+    $('#cloud-password').value='';cloud.user=result.user;cloud.configured=true;cloud.signedIn=true;cloud.error='';cloud.linked=cloud.owner===result.user.id&&cloud.revision>0;
+    await getCloudWorkspace({initial:true});render();
+    if(cloud.dirty&&cloud.linked&&!cloud.reconcile)syncCloud();
+  }catch(e){const el=$('#cloud-login-error');if(el)el.textContent=e.message;}
+  finally{if(button.isConnected)button.disabled=false;}
+}
+async function syncCloud(){
+  if(cloud.busy||!cloud.signedIn||!cloud.linked||cloud.reconcile||!cloud.dirty||persistenceBlocked||!navigator.onLine)return;
+  const run=async()=>{
+    if(cloud.busy||!cloud.signedIn||cloud.reconcile||!cloud.dirty)return;
+    cloud.busy=true;cloud.error='';paintCloudStatus();
+    const generation=cloud.generation;
+    try{
+      if(state.demo)throw Error('Restore your own records or start fresh before syncing.');
+      const data=validateState(state);
+      if(new Blob([JSON.stringify(data)]).size>3*1024*1024)throw Error('This workspace exceeds the 3 MB cloud limit. Export a local backup, then reduce oversized images.');
+      const canonical=stableRecord(data)+'|'+cloud.timezone+'|'+Boolean(cloud.replaceNext);
+      if(!cloud.pendingMutation||cloud.pendingMutation.content!==canonical)cloud.pendingMutation={id:crypto.randomUUID(),content:canonical,data};
+      const mutation=cloud.pendingMutation;
+      const result=await cloudRequest('workspace','PUT',{data:mutation.data,expectedRevision:cloud.revision,mutationId:mutation.id,timezone:cloud.timezone,replace:cloud.replaceNext===true});
+      cloud.revision=result.revision;cloud.lastSync=result.updated_at;cloud.owner=cloud.user.id;cloud.replaceNext=false;cloud.pendingMutation=null;cloud.dirty=generation!==cloud.generation;saveCloudMeta();
+    }catch(e){
+      if(e.status===409){try{const data=await cloudRequest('workspace');cloud.remote=data.workspace;cloud.health=data.status;cloud.reconcile={remote:data.workspace,initial:false};}catch{} }
+      cloudError(e);
+    }finally{
+      cloud.busy=false;paintCloudStatus();if(ui.page==='cloud'&&!$('#modal').open)render();
+      if(cloud.dirty&&!cloud.reconcile&&cloud.signedIn){clearTimeout(cloud.timer);cloud.timer=setTimeout(syncCloud,cloud.error?15000:800);}
+    }
+  };
+  if(navigator.locks)await navigator.locks.request('vault-cloud-write',run);else await run();
+}
+async function pollCloud(){
+  if(!cloud.signedIn||cloud.busy||document.hidden||!navigator.onLine)return;
+  if(cloud.dirty&&!cloud.reconcile){await syncCloud();return;}
+  if(cloud.reconcile)return;
+  cloud.busy=true;
+  try{await getCloudWorkspace();cloud.error='';}catch(e){cloudError(e);}finally{cloud.busy=false;paintCloudStatus();if(ui.page==='cloud'&&!$('#modal').open)render();}
+}
+async function chooseCloudCopy(){
+  if(cloud.busy)return;
+  confirmAction('Continue with the cloud copy?',`<p>This replaces this browser's workspace with your private cloud records. Other devices and the cloud copy are not overwritten.</p><p>Download your local copy first if it contains changes you need.</p><button class="btn btn-secondary" data-action="export">${icon('download')}Download this device's copy</button>`,'Use cloud workspace',async()=>{
+    cloud.busy=true;
+    try{if(hasWorkspaceData()&&!state.demo)localStorage.setItem(RECOVERY_KEY,JSON.stringify({savedAt:new Date().toISOString(),raw:JSON.stringify(state)}));const latest=await cloudRequest('workspace');if(!latest.workspace)throw Error('No cloud workspace exists yet.');closeModal();adoptCloud(latest.workspace);toast('Cloud workspace loaded on this device.');}
+    catch(e){formError(e.message);cloudError(e);}finally{cloud.busy=false;paintCloudStatus();}
+  },false);
+}
+function chooseLocalCopy(){
+  if(cloud.busy)return;
+  if(state.demo){toast('Restore your JSON backup or choose Start fresh before uploading. Sample data is never uploaded.',true);return;}
+  const tz=$('#cloud-timezone')?.value.trim()||cloud.timezone;
+  try{new Intl.DateTimeFormat('en',{timeZone:tz});}catch{return toast('Enter a valid time zone, for example Asia/Dubai.',true);}
+  const remote=cloud.reconcile?.remote||cloud.remote;
+  confirmAction(remote?'Replace the cloud copy?':'Start your private cloud workspace?',`<p><strong>${remote?'Your local workspace will replace the cloud records.':'Your current workspace will be uploaded to your private database.'}</strong></p><p>${state.assets.length} accounts, ${state.entries.length} transactions, ${state.loans.length} loans and ${state.loanPayments.length} repayments. Backup time zone: <strong>${esc(tz)}</strong>.</p><p>${remote?'A server-side recovery snapshot of the previous cloud copy is kept before replacement. This does not merge two versions.':'Other devices can use the same login to load this workspace.'}</p>` ,remote?'Replace cloud copy':'Upload my workspace',async()=>{
+    if(cloud.busy)return;cloud.busy=true;
+    try{
+      const data=validateState(state),generation=cloud.generation;
+      const saved=await cloudRequest('workspace','PUT',{data,expectedRevision:remote?.revision||0,mutationId:crypto.randomUUID(),timezone:tz,replace:Boolean(remote)});
+      cloud.linked=true;cloud.owner=cloud.user.id;cloud.revision=saved.revision;cloud.timezone=tz;cloud.lastSync=saved.updated_at;cloud.dirty=generation!==cloud.generation;cloud.reconcile=null;cloud.error='';cloud.pendingMutation=null;saveCloudMeta();closeModal();render();toast('Your private workspace is connected.');
+      await loadCloudBackups();
+    }catch(e){if(e.status===409){const latest=await cloudRequest('workspace').catch(()=>null);if(latest)cloud.reconcile={remote:latest.workspace,initial:false};}formError(e.message);cloudError(e);}
+    finally{cloud.busy=false;paintCloudStatus();}
+  },Boolean(remote));
+}
+async function loadCloudBackups(){
+  if(!cloud.signedIn)return;
+  try{const r=await cloudRequest('backups');cloud.backups=r.backups;cloud.backupsLoaded=true;cloud.error='';if(ui.page==='cloud'&&!$('#modal').open)render();}
+  catch(e){cloudError(e);if(ui.page==='cloud'&&!$('#modal').open)render();}
+}
+async function manualCloudBackup(){
+  await syncCloud();
+  if(cloud.dirty||cloud.reconcile||!cloud.linked||cloud.busy)return toast('Finish syncing or review the device copies before making a cloud backup.',true);
+  cloud.busy=true;paintCloudStatus();
+  try{await cloudRequest('backups','POST',{});toast('Private cloud backup created.');await loadCloudBackups();}
+  catch(e){cloudError(e);toast(e.message,true);}finally{cloud.busy=false;paintCloudStatus();}
+}
+async function downloadCloudBackup(id){
+  try{const {backup}=await cloudRequest('backup&id='+encodeURIComponent(id));downloadBlob('vault-cloud-'+backup.backup_day+'-'+backup.kind+'.json',JSON.stringify(validateState(backup.data),null,2));toast('Cloud snapshot prepared as a portable JSON file.');}
+  catch(e){cloudError(e);toast(e.message,true);}
+}
+function restoreCloudBackup(id){
+  if(cloud.busy||cloud.dirty||cloud.reconcile)return toast('Sync or resolve your current workspace before restoring a cloud snapshot.',true);
+  const b=cloud.backups.find(x=>x.id===id);if(!b)return;
+  confirmAction('Restore this cloud snapshot?',`<p>Restore the <strong>${esc(b.kind)}</strong> copy for <strong>${esc(b.backup_day)}</strong>, revision ${b.revision}?</p><p>This replaces your current cloud workspace and this device. Other signed-in devices will detect the new revision. A pre-restore cloud snapshot is created first.</p><p>No repayments or transactions are replayed.</p>`,'Restore snapshot',async()=>{
+    cloud.busy=true;const generation=cloud.generation;
+    try{const saved=await cloudRequest('restore','POST',{backupId:id,expectedRevision:cloud.revision,mutationId:crypto.randomUUID()});closeModal();if(generation!==cloud.generation){cloud.reconcile={remote:saved,initial:false};render();}else adoptCloud(saved);toast('Cloud snapshot restored. A recovery copy was kept.');await loadCloudBackups();}
+    catch(e){formError(e.message);cloudError(e);}finally{cloud.busy=false;paintCloudStatus();}
+  },true);
+}
+function signOutCloud(){
+  confirmAction('Sign out on this device?',`<p>${cloud.dirty?'<strong>There are unsynced changes. Download a backup before continuing.</strong>':'Your cloud records and daily backup job are not deleted.'}</p><p>The sign-out below also clears the locally cached workspace and recovery copy on this device. Saved JSON downloads are not deleted.</p><button class="btn btn-secondary" data-action="export">${icon('download')}Download my current copy</button>`,'Sign out & clear this device',async()=>{
+    if(cloud.busy)return;cloud.busy=true;clearTimeout(cloud.timer);
+    try{await cloudRequest('logout','POST',{});clearTimeout(cloud.timer);localStorage.removeItem(STORAGE_KEY);localStorage.removeItem(RECOVERY_KEY);localStorage.removeItem(CLOUD_META_KEY);state=blankState();state.profile.name='My workspace';cloud.signedIn=false;cloud.linked=false;cloud.owner='';cloud.user=null;cloud.revision=0;cloud.dirty=false;cloud.reconcile=null;cloud.error='';cloud.backups=[];cloud.remote=null;closeModal();render();toast('Signed out. The cached records on this device were cleared.');}
+    catch(e){formError(e.message);}finally{cloud.busy=false;paintCloudStatus();}
+  },true);
+}
+function cloudPage(){
+  const health=cloud.health||{},jobFresh=health.lastJobSuccess&&Date.now()-new Date(health.lastJobSuccess).getTime()<20*60000;
+  const jobLabel=!cloud.signedIn?'Sign in to check':!health.schedulerConfigured?'Scheduler not installed':jobFresh?'Daily backup job running':'Scheduler needs attention';
+  const remote=cloud.reconcile?.remote,localCount=`${state.assets.length} accounts / ${state.entries.length} transactions / ${state.loans.length} loans`;
+  return `<div class="page-heading"><div><div class="eyebrow">PRIVATE CLOUD</div><h1>Keep it safe. Keep it in sync.</h1><p>Your workspace across devices, with a separate copy of each completed day.</p></div><button class="btn btn-secondary" data-page="backup">${icon('download')}File backups</button></div>
+    <div class="cloud-status-grid"><section class="cloud-status-card"><span>${icon('globe')}Connection</span><strong data-cloud-status>${esc(cloudStatusText())}</strong><small>${cloud.lastSync?'Last server save: '+esc(formatStamp(cloud.lastSync)):'Local saving works before cloud setup.'}</small></section><section class="cloud-status-card"><span>${icon('shield')}Daily protection</span><strong>${jobLabel}</strong><small>${health.lastBackupDay?'Latest completed day: '+esc(health.lastBackupDay):'Runs after local midnight once configured.'}</small></section><section class="cloud-status-card"><span>${icon('clock')}Backup schedule</span><strong>00:05 / ${esc(cloud.timezone)}</strong><small>90-day history. Includes records synced before midnight.</small></section></div>
+    ${cloud.error?`<div class="inline-note warning cloud-alert">${icon('info')}<span>${esc(cloud.error)}</span></div>`:''}
+    ${!cloud.configured?`<section class="panel cloud-setup"><span class="backup-icon">${icon('shield')}</span><h2>Your backend is ready to connect.</h2><p>This copy is running locally. Uploading only an HTML file does not enable automatic backups.</p><div class="setup-steps"><div><b>01</b><span>Create your private database<small>Run the supplied schema and scheduler SQL in Supabase.</small></span></div><div><b>02</b><span>Configure your Vercel project<small>Add the environment variables in SETUP.md. No keys go in GitHub.</small></span></div><div><b>03</b><span>Sign in and choose your records<small>Upload this browser's workspace once. Your other devices can then load it.</small></span></div></div><div class="quick-inline-actions"><button class="btn btn-primary" data-action="cloud-refresh">${icon('globe')}Check connection</button><button class="btn btn-secondary" data-page="backup">${icon('folder')}Keep using file backups</button></div></section>`:
+    !cloud.signedIn?`<div class="cloud-connect-grid"><section class="panel cloud-login"><div class="eyebrow">YOUR PRIVATE ACCOUNT</div><h2>Welcome back.</h2><p>Use the owner account created in your Supabase project. There is no public registration.</p><form id="cloud-login-form"><div class="form-error" id="cloud-login-error" role="alert"></div><div class="field"><label for="cloud-email">Email</label><input class="input" type="email" id="cloud-email" autocomplete="username" required></div><div class="field"><label for="cloud-password">Password</label><input class="input" id="cloud-password" type="password" autocomplete="current-password" required></div><button class="btn btn-primary" type="submit">${icon('shield')}Sign in securely</button></form><p class="field-help">Signing in does not silently overwrite local records. On a new device, choose the cloud copy to continue.</p></section><section class="panel cloud-explainer"><h3>One workspace. All your devices.</h3><p>Changes are first saved on this device, then sent to your private database when connected. A daily job saves the last server-saved revision before midnight.</p><p>Offline changes stay here until the app is open and online again. They cannot be included in an earlier daily snapshot.</p><p>Need to reset your password? Manage your owner account through the Supabase dashboard.</p></section></div>`:
+    `<section class="panel cloud-account"><div><strong>${esc(cloud.user?.email||'Owner signed in')}</strong><p>Private owner account &middot; ${cloud.linked?'This device is linked':'Choose a workspace below'}</p></div><div class="quick-inline-actions"><button class="btn btn-secondary" data-action="cloud-refresh">${icon('globe')}Refresh</button><button class="btn btn-secondary" data-action="cloud-signout">Sign out</button></div></section>
+      ${cloud.reconcile?`<section class="panel cloud-reconcile"><div class="eyebrow">${remote?'REVIEW BEFORE CONTINUING':'FIRST CLOUD SAVE'}</div><h2>${remote?'Which workspace should you continue with?':'Take this workspace to your other devices.'}</h2><p>${remote?'We have paused syncing so neither copy is silently overwritten. These options replace a workspace; they do not merge records.':'Restore your latest JSON backup first if this browser does not have your latest data.'}</p><div class="copy-options"><div><h3>This device</h3><strong>${esc(state.profile.name)}</strong><p>${localCount}${state.demo?' / demo data':''}</p><button class="btn btn-secondary" data-action="export">${icon('download')}Download local copy</button></div>${remote?`<div><h3>Private cloud</h3><strong>${esc(remote.data.profile.name)}</strong><p>${remote.data.assets.length} accounts / ${remote.data.entries.length} transactions / ${remote.data.loans.length} loans<br>Revision ${remote.revision} &middot; ${esc(formatStamp(remote.updated_at))}</p><button class="btn btn-primary" data-action="cloud-use-remote">${icon('download')}Continue with cloud data</button></div>`:''}</div><div class="field timezone-field"><label for="cloud-timezone">Backup time zone</label><input class="input" id="cloud-timezone" list="timezone-list" value="${esc(cloud.timezone)}" placeholder="e.g. Asia/Dubai"><p class="field-help">Your browser's zone is suggested. Confirm the zone you want for end-of-day backups.</p></div>${timezoneList()}<button class="btn ${remote?'btn-secondary':'btn-primary'}" data-action="cloud-use-local" ${state.demo?'disabled':''}>${icon('upload')}${remote?'Use this device instead':'Upload this workspace'}</button>${state.demo?`<p class="field-help">Sample data cannot be uploaded. <button class="text-link" data-action="import">Restore your backup</button> or <button class="text-link" data-action="start-fresh">Start fresh</button>.</p>`:''}</section>`:
+      `<section class="panel cloud-tools"><div><h3>Automatic sync is ${cloud.linked?'connected':'not linked yet'}.</h3><p>Edits sync while this app is open and online. The daily database job runs without an open browser.</p></div><div class="quick-inline-actions"><button class="btn btn-primary" data-action="cloud-sync">${icon('globe')}Sync now</button><button class="btn btn-secondary" data-action="cloud-backup">${icon('shield')}Create cloud backup</button></div><div class="field timezone-field"><label for="cloud-timezone">End-of-day time zone</label><div class="timezone-row"><input class="input" id="cloud-timezone" list="timezone-list" value="${esc(cloud.timezone)}"><button class="btn btn-secondary" data-action="cloud-timezone">Save zone</button></div></div>${timezoneList()}</section>`}
+      <section class="panel cloud-history"><div class="panel-heading"><div><h3>Cloud backup history</h3><p>Daily, manual and pre-restore snapshots. Download a JSON copy or restore a version.</p></div><button class="btn btn-secondary btn-small" data-action="cloud-load-backups">${icon('clock')}Load history</button></div>${cloud.backups.length?`<div class="cloud-backup-list">${cloud.backups.map(b=>`<div class="cloud-backup-row"><span class="backup-icon">${icon(b.kind==='daily'?'calendar':'shield')}</span><div><strong>${esc(b.backup_day)} <span class="small-tag">${esc(b.kind.replace(/-/g,' '))}</span></strong><small>Revision ${b.revision} &middot; ${esc(b.timezone)}<br>Server saved: ${esc(formatStamp(b.source_saved_at))}</small></div><div class="quick-inline-actions"><button class="btn btn-secondary btn-small" data-action="cloud-download" data-id="${b.id}" aria-label="Download backup for ${b.backup_day}">${icon('download')}JSON</button><button class="btn btn-secondary btn-small" data-action="cloud-restore" data-id="${b.id}">Restore</button></div></div>`).join('')}</div>`:`<div class="empty-state">${icon('folder')}<h3>${cloud.backupsLoaded?'No cloud snapshots yet':'Load your saved snapshots'}</h3><p>${cloud.backupsLoaded?'The first daily copy appears after a completed day of synced data. You can create a manual backup now.':'Your financial records are never stored as public website files.'}</p></div>`}</section>`}
+    <div class="inline-note cloud-footnote">${icon('info')}<span><strong>Keep an independent copy too.</strong> These snapshots are stored in your private database, not a separate disaster-recovery service. Deleted projects or service outages can affect access. Download occasional JSON backups to a private location. Local caches and downloaded JSON files are not encrypted by this app.</span></div>`;
+}
+function timezoneList(){return '<datalist id="timezone-list">'+['Asia/Dubai','Asia/Kabul','Asia/Kolkata','Asia/Tashkent','Asia/Tehran','Europe/London','Europe/Berlin','America/New_York','America/Los_Angeles','UTC'].map(t=>'<option value="'+t+'">').join('')+'</datalist>';}
+function quickPage(){
+  const t=totals(),cash=state.assets.filter(a=>a.category==='cash'),recent=[...state.entries].sort(sortEntries).slice(0,4),due=state.loans.filter(l=>loanRemaining(l)>1e-8).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')).slice(0,3);
+  const actions=[['expense','Spend','Purchases & family support','upload'],['income','Money in','Salary, gifts & refunds','download'],['pnl','Profit / loss','Log a trading result','chart'],['transfer','Transfer','Move between your accounts','transfer'],['balance','Update balance','Set what is available now','wallet'],['repayment','Loan payment','Repay or receive money','shield']];
+  return `<div class="quick-page">${demoBanner()}<section class="quick-header"><div class="profile-identity">${avatar()}<div><div class="profile-name">${esc(state.profile.name)} ${state.profile.badge?badge():''}</div><div class="profile-subtitle">Your personal workspace</div></div></div><button class="btn btn-secondary" data-page="overview">Full dashboard ${icon('arrow-right')}</button></section><section class="quick-hero"><div class="eyebrow">QUICK UPDATE</div><h1>Update &amp; go.</h1><p>Small actions. Everything in one place.</p><div class="quick-summary"><div><span>Everyday money</span><strong>${money(t.cash)}<small>${esc(state.settings.displayCurrency)}</small></strong></div><button class="quick-cloud" data-page="cloud">${icon('globe')}<span data-cloud-status>${esc(cloudStatusText())}</span>${icon('chevron')}</button></div></section><section class="quick-actions" aria-label="Quick money actions">${actions.map(([key,title,sub,i])=>`<button class="quick-action ${key==='expense'?'quick-action-primary':''}" data-action="quick-action" data-kind="${key}"><span class="quick-action-icon">${icon(i)}</span><strong>${title}</strong><small>${sub}</small><span class="quick-action-arrow">${icon('arrow-right')}</span></button>`).join('')}</section><section class="quick-account-section"><div class="section-heading"><div><h2>Your daily accounts</h2><p>Cash, bank and wallet balances.</p></div><button class="text-link" data-page="cash">All ${icon('arrow-right')}</button></div>${cash.length?`<div class="quick-account-list">${cash.map(a=>`<button class="quick-account" data-action="quick-select" data-kind="expense" data-id="${a.id}">${assetLogo(a)}<span><strong>${esc(a.name)}</strong><small>${esc(a.platform||'Everyday account')}</small></span><div><strong>${moneyNative(metrics(a).value,a.currency)}</strong><small>${esc(a.currency)}</small></div>${icon('chevron')}</button>`).join('')}</div>`:`<button class="empty-card" data-action="add-asset" data-category="cash"><span>${icon('plus')}</span><strong>Add your first everyday account</strong><small>Binance, your bank or cash on hand.</small></button>`}</section>${due.length?`<section class="quick-loans"><div class="section-heading"><div><h2>Loans to keep in view</h2><p>Next due dates and remaining principal.</p></div><button class="text-link" data-page="loans">All ${icon('arrow-right')}</button></div>${due.map(l=>`<button class="quick-loan" data-action="repay-loan" data-id="${l.id}"><span class="backup-icon">${icon(l.direction==='borrowed'?'upload':'download')}</span><span><strong>${esc(l.person)}</strong><small>${l.direction==='borrowed'?'You owe':'Owes you'} &middot; ${l.dueDate?esc(dateLabel(l.dueDate)):'No due date'}</small></span><strong>${moneyNative(loanRemaining(l),l.currency)}</strong>${icon('chevron')}</button>`).join('')}</section>`:''}<section class="panel quick-recent"><div class="panel-heading"><div><h3>Latest updates</h3><p>Your most recent account activity.</p></div><button class="text-link" data-page="activity">View all ${icon('arrow-right')}</button></div>${ledgerTable(recent,{compact:true})}</section><section class="quick-install"><span class="backup-icon">${icon('phone')}</span><div><strong>One tap from your home screen.</strong><p>Add this Quick Update screen to your phone.</p></div><button class="btn btn-secondary" data-action="install-help">Add shortcut</button></section><div class="quick-bottom-link"><button class="text-link" data-page="overview">All charts, accounts, settings and reports ${icon('arrow-right')}</button></div></div>`;
+}
+function quickChoose(kind){
+  if(kind==='transfer'&&state.assets.length<2){openAsset('','cash');toast('Add a second account before transferring between your own accounts.');return;}
+  if(kind==='repayment'){
+    const loans=state.loans.filter(l=>loanRemaining(l)>1e-8);
+    if(!loans.length){openLoan();return;}
+    modalDraft={type:'quick-picker'};showModal(`${modalHeader('Choose a loan','Record a repayment or money received.')}<div class="modal-body quick-picker-list">${loans.map(l=>`<button class="quick-picker-row" data-action="repay-loan" data-id="${l.id}">${icon('shield')}<span><strong>${esc(l.person)}</strong><small>${esc(l.title)} &middot; ${l.direction==='borrowed'?'I borrowed':'I lent'}</small></span><strong>${moneyNative(loanRemaining(l),l.currency)}</strong>${icon('chevron')}</button>`).join('')}</div>`,true);return;
+  }
+  const list=state.assets.filter(a=>['expense','income'].includes(kind)?a.category==='cash':kind==='pnl'?a.category!=='cash':true);
+  if(!list.length){openAsset('',kind==='pnl'?'forex':'cash');toast('Add an account first.');return;}
+  if(list.length===1){quickSelect(kind,list[0].id);return;}
+  modalDraft={type:'quick-picker'};showModal(`${modalHeader('Choose an account',kind==='pnl'?'Trading results only. Everyday spending is separate.':'Which account would you like to update?')}<div class="modal-body quick-picker-list">${list.map(a=>`<button class="quick-picker-row" data-action="quick-select" data-kind="${kind}" data-id="${a.id}">${assetLogo(a)}<span><strong>${esc(a.name)}</strong><small>${esc(a.platform||CATEGORY[a.category].short)}</small></span><strong>${moneyNative(metrics(a).value,a.currency)} <small>${esc(a.currency)}</small></strong>${icon('chevron')}</button>`).join('')}</div>`,true);
+}
+function quickSelect(kind,id){
+  if(kind==='balance'){quickBalance(id);return;}
+  openEntry(id,kind==='pnl'?'profit':kind);
+}
+function quickBalance(id){
+  const a=assetById(id);if(!a)return;modalDraft={type:'quick-balance',id};
+  showModal(`${modalHeader('Update current balance',esc(a.name)+' / '+esc(a.currency))}<form id="quick-balance-form"><div class="modal-body"><div class="form-error" id="form-error" role="alert"></div><div class="quick-balance-current"><span>Currently recorded</span><strong>${moneyNative(metrics(a).value,a.currency,{reveal:true})}</strong></div><div class="field"><label for="quick-balance-value">${a.category==='cash'?'Available balance right now':'Current account value'}</label><input class="input quick-amount" id="quick-balance-value" type="number" inputmode="decimal" step="any" min="0" max="10000000000000" required placeholder="0.00"></div><div class="field" style="margin-top:18px"><label for="quick-balance-note">Note <span class="field-label-hint">Optional</span></label><input class="input" id="quick-balance-note" maxlength="300" placeholder="Balance checked today"></div><div class="inline-note" style="margin-top:20px">${icon('info')}<span>This sets the balance to the amount above; it does not add it again. ${a.category==='cash'?'A cash balance correction is not trading profit or loss.':'Use Profit / loss instead for a daily trading result.'}</span></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">${icon('check')}Update balance</button></div></form>`,true);
+  requestAnimationFrame(()=>$('#quick-balance-value')?.focus());
+}
+function saveQuickBalance(){
+  const a=assetById(modalDraft?.id),value=Number($('#quick-balance-value').value);if(!a||!validNumber(value,0))return formError('Enter a valid available balance.');
+  const difference=round(value-metrics(a).value);
+  if(Math.abs(difference)>1e-8)state.entries.push({id:uid(),assetId:a.id,kind:'valuation',amount:difference,note:$('#quick-balance-note').value.trim()||'Quick current-balance update',date:today(),createdAt:new Date().toISOString(),fx:rate(a.currency),groupId:'',cashCategory:'',counterparty:'',loanId:'',paymentId:''});
+  closeModal();commit('Balance updated.');
+}
+function showInstallHelp(){
+  const file=location.protocol==='file:';
+  modalDraft={type:'install'};showModal(`${modalHeader('Your phone shortcut','Quick updates, without losing the full dashboard.')}<div class="modal-body"><div class="install-preview"><svg viewBox="0 0 463 527" aria-hidden="true"><use href="#brand-logo"/></svg><div><strong>Vault Quick</strong><p>Spending, trading results and loan payments.</p></div></div>${file?'<div class="inline-note warning">Open the deployed HTTPS website on your phone first. A downloaded HTML file cannot install the hosted shortcut.</div>':`<p class="about-copy"><strong>On iPhone:</strong> open Quick Update in Safari, then use Share &rarr; Add to Home Screen. Enable Open as Web App where available.<br><br><strong>On Android:</strong> use the browser menu &rarr; Install app / Add to Home screen.</p><div class="quick-inline-actions">${cloud.installPrompt?'<button class="btn btn-primary" data-action="install-now">Install Vault Quick</button>':''}<button class="btn btn-secondary" data-action="copy-quick-link">${icon('phone')}Copy shortcut link</button></div>`}<p class="field-help" style="margin-top:18px">The shortcut opens Quick Update. Full dashboard, charts, loans, settings and file backups remain available. Sign in to the same private workspace on each device to sync.</p></div><div class="modal-footer"><button class="btn btn-primary" data-action="close-modal">Done</button></div>`,true);
+}
+function handleCloudQuickAction(action,el){
+  const run=fn=>{Promise.resolve().then(fn).catch(e=>{cloudError(e);toast(e.message,true);});};
+  if(action==='quick-action'){quickChoose(el.dataset.kind);return true;}
+  if(action==='quick-select'){quickSelect(el.dataset.kind,el.dataset.id);return true;}
+  if(action==='install-help'){showInstallHelp();return true;}
+  if(action==='install-now'){run(async()=>{if(cloud.installPrompt){await cloud.installPrompt.prompt();await cloud.installPrompt.userChoice;cloud.installPrompt=null;closeModal();}});return true;}
+  if(action==='copy-quick-link'){run(async()=>{const url=new URL(location.href);url.search='?quick=1';url.hash='quick';await navigator.clipboard.writeText(url.href);toast('Quick Update link copied.');});return true;}
+  if(action==='cloud-refresh'){run(async()=>{cloud.error='';await initCloud();if(cloud.signedIn)await loadCloudBackups();});return true;}
+  if(action==='cloud-sync'){run(async()=>{await syncCloud();await pollCloud();paintCloudStatus();});return true;}
+  if(action==='cloud-use-remote'){run(chooseCloudCopy);return true;}
+  if(action==='cloud-use-local'){chooseLocalCopy();return true;}
+  if(action==='cloud-signout'){signOutCloud();return true;}
+  if(action==='cloud-load-backups'){run(loadCloudBackups);return true;}
+  if(action==='cloud-backup'){run(manualCloudBackup);return true;}
+  if(action==='cloud-download'){run(()=>downloadCloudBackup(el.dataset.id));return true;}
+  if(action==='cloud-restore'){restoreCloudBackup(el.dataset.id);return true;}
+  if(action==='cloud-timezone'){
+    const tz=$('#cloud-timezone').value.trim();try{new Intl.DateTimeFormat('en',{timeZone:tz});}catch{return toast('Enter a valid time zone such as Asia/Dubai.',true),true;}
+    if(cloud.reconcile||!cloud.linked)return toast('Choose a workspace before changing its time zone.',true),true;
+    cloud.timezone=tz;cloudLocalChanged();toast('Time zone queued for the next server save.');return true;
+  }
+  return false;
+}
+function initQuickCloud(){
+  if(!location.hash&&(new URLSearchParams(location.search).get('quick')==='1'||matchMedia('(max-width:760px)').matches))ui.page='quick';
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();cloud.installPrompt=e;});
+  window.addEventListener('online',()=>{if(cloud.signedIn){syncCloud();pollCloud();}else initCloud();});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollCloud();});
+  window.addEventListener('beforeunload',e=>{if(cloud.dirty&&cloud.linked){e.preventDefault();e.returnValue='Changes are saved on this device but have not reached the cloud yet.';}});
+  window.addEventListener('storage',e=>{if(e.key===STORAGE_KEY&&e.newValue===null&&cloud.owner){clearTimeout(cloud.timer);cloud.signedIn=false;cloud.linked=false;cloud.dirty=false;cloud.reconcile=null;cloud.owner='';cloud.user=null;cloud.revision=0;cloud.error='';state=blankState();closeModal();setPage('cloud');}});
+  setInterval(pollCloud,30000);
+  if(location.protocol==='https:'&&'serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(()=>{});}
+  initCloud();
+}
+
 initInterfaceUpgrade();
+initQuickCloud();
 render();
 if(!storageOk)setTimeout(()=>toast(persistenceBlocked?'Saved data needs recovery. It has not been overwritten. Open Settings.':'Browser saving is unavailable. Use Export JSON to keep your work.',true),600);
 })();

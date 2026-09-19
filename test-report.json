@@ -1,44 +1,61 @@
 {
-  "interfaceVersion": 3,
-  "backupSchemaVersion": 2,
-  "engine": "Headless Chromium",
-  "viewportWidths": [
-    320,
-    360,
-    390,
-    430,
-    540,
-    768,
-    1024,
-    1440
+  "release": "Vault interface v4; ledger schema v2",
+  "tested_at_utc": "2026-09-19T20:59:27.848606+00:00",
+  "node_tests": {
+    "passed": 21,
+    "failed": 0,
+    "scope": "Node built-in tests; authentication/CSRF/cookie/ledger logic and mocked Supabase API calls"
+  },
+  "browser_tests": {
+    "engine": "Headless Chromium, locally rendered app; in-memory test storage and mocked network",
+    "viewports": [
+      320,
+      360,
+      390,
+      430,
+      540,
+      768,
+      1024,
+      1440
+    ],
+    "routes": [
+      "quick",
+      "overview",
+      "cash",
+      "loans",
+      "tracker",
+      "activity",
+      "settings",
+      "backup",
+      "cloud"
+    ],
+    "route_viewport_combinations": 72,
+    "document_horizontal_overflow": 0,
+    "uncaught_page_errors": 0,
+    "flows": [
+      "Quick spending uses the full account entry form",
+      "Sign-in and explicit initial upload",
+      "Clean remote revision is loaded",
+      "Simultaneous changes preserve both copies for review",
+      "Quick balance uses valuation delta; investment profit unchanged",
+      "Custom loan date picker opens on mobile; cancel preserves date",
+      "User-supplied v2 backup round-trips all records, images and saved rates privately",
+      "Offline network failure keeps local edit; successful retry clears pending state",
+      "Mocked cloud manual backup and restore replace state without replaying ledger entries",
+      "Mobile Full dashboard action retains overview and charts"
+    ]
+  },
+  "asset_integrity": {
+    "tick_png_sha256": "d7c75a6150df7dbe0e26c84c7e82e27ba943d9330cae4110122f0b90eb30bb2f",
+    "exact_original_tick_bytes": true
+  },
+  "build": "npm run build passed; public allow-list excludes SQL, tests, environment files, old standalone builds, and private JSON",
+  "not_tested": [
+    "No live Supabase project: database migration, row-level security behavior and pg_cron execution must be verified after installation",
+    "No live GitHub push or Vercel deployment",
+    "No real-device Safari/Android installation or production cookie lifecycle test",
+    "Not an independent security audit or disaster-recovery certification"
   ],
-  "layoutChecks": 56,
-  "documentHorizontalOverflowFailures": 0,
-  "dataChecks": [
-    "Supplied version-2 backup restored with original arrays, photos and numeric values unchanged",
-    "Export and restore preserve all canonical records",
-    "Restore to an independent browser workspace retains linked loans and payments",
-    "Invalid JSON and missing account references do not replace current data",
-    "Storage write failure does not replace active records",
-    "Pre-restore copy can be reviewed and restored",
-    "Export current workspace from import preview keeps confirmation usable"
-  ],
-  "uiChecks": [
-    "Branded date selection",
-    "Leap-day selection",
-    "Clear optional date",
-    "Required date cannot be cleared",
-    "Contextual maximum/minimum dates",
-    "Month-only picker",
-    "Escape closes picker without closing parent form",
-    "Mobile loan form and saving",
-    "Cash spending and investment results stay separate",
-    "Loan repayments update cash and loan state",
-    "Exact brand colors"
-  ],
-  "limitations": [
-    "Layouts and interactions tested in a browser rendering the supplied HTML directly. The environment restricts browser navigation, so storage and download transport were represented with test doubles.",
-    "No physical iOS or Android device, Safari, native save dialog, or public hosted deployment was tested."
-  ],
-  "personalDataIncluded": false
+  "private_user_data_in_package": false,
+  "status": "Ready for configuration and deployment testing; cloud backup is NOT activated by this package"
 }
