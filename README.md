@@ -1,91 +1,119 @@
-# Vault - Personal Asset Manager
+# Vault - Money, Assets & Loans
 
-A working, responsive, local-first dashboard for cash, trading accounts, crypto holdings and other personal assets. The interface uses your supplied white SVG logo with Obsidian Root (#0C0E09), Electric Sun (#FCFF1A), and Nox Noir (#141414). The optional personal badge uses Electric Sun. It is decorative, not independent verification.
+A self-contained personal finance dashboard using your supplied logo and palette:
+Obsidian Root `#0C0E09`, Nox Noir `#141414`, and Electric Sun `#FCFF1A`.
 
-## Open the dashboard
+## Open the app
 
-The easiest version is **vault-assets.html**. Open it in a desktop browser; it contains all the code it needs and makes no network requests.
+Open `vault-money-and-loans.html` in a normal desktop browser. No installation, account, external font, library or internet connection is required for the standalone file. The app uses the browser's local storage. Local-file storage behavior can differ between browsers and file locations; export JSON backups before moving or renaming the file.
 
-The source version consists of `index.html`, `styles.css` and `app.js`. Keep these three files in the same folder. The original supplied `logo.svg` is also included; the UI embeds the same vector paths for offline use. There is no package installation, build system, third-party JavaScript library or API key.
+For a static-hosting workflow, keep `index.html`, `app.js` and `styles.css` together. The logo is also embedded in the HTML, so the standalone version has no asset dependencies. The separate `logo.svg` is your original source asset.
 
-The first launch contains clearly labeled sample data. Use **Start fresh** before entering your real balances. This keeps your profile and currency settings but removes the sample assets, entries and chart history.
+There is no hosting account or cloud database in this delivery. Protect access to the computer and browser profile that contain your records.
 
-## Moving from the earlier version
+## Keep your existing records
 
-Before switching files or browsers, open the earlier dashboard and export a JSON backup. Then open this branded version, choose **Backup & restore**, and import the backup. The storage key and backup format have not changed, but browsers may keep separate storage for different local HTML file paths. Do not assume that moving or renaming a file carries your data with it.
+1. In the previous website, open **Backup & restore** and export a JSON backup before switching versions.
+2. Open this version and use **Backup & restore > Import JSON**. Confirm that the displayed account and entry counts are correct.
+3. Keep the original backup. Version 1 files are accepted and upgraded; new version 2 loan backups are not readable by the old app.
 
-## Brand details
+The existing storage key is retained for browsers that share the same storage location. The upgrade does not reset existing balances, logos, profile photos, manual currency rates or entry history. A new filename may have different storage, so use the explicit export/import procedure rather than relying on automatic detection.
 
-- **Obsidian Root #0C0E09:** application background, sidebar and input surfaces.
-- **Nox Noir #141414:** cards, panels and dialogs.
-- **Electric Sun #FCFF1A:** primary buttons, navigation, positive values, focus rings, chart highlights and profile badge.
-- The supplied white SVG geometry is unchanged and appears in desktop navigation, the mobile header and the browser icon.
-- Supporting labels use neutral whites and greys. Losses have explicit minus signs and labels, left-facing performance bars and a striped treatment, rather than introducing another brand colour.
-- Existing profile, asset, daily ledger, currency conversion and backup calculations are unchanged.
+Existing cash balances are not guessed from the old investment field. If an older Binance card showed an opening investment of 758 and a current value of 0, the actual saved available balance was 0. Edit Binance and enter the real available balance. Do not enter 758 unless that is what is still available.
 
-## Included features
+An empty installation opens with clearly labeled illustrative data. **Start fresh** clears that demo. Do not use Start fresh after importing your records unless you intend to erase the workspace.
 
-- Profile name and subtitle editing, photo upload/replacement/removal, and an optional profile display badge.
-- Headline net worth in USDT, calculated from every included asset. Other display currencies are configurable.
-- Cash, forex, crypto, stocks/ETFs, property, other investments, and prop/demo accounts.
-- Asset cards with brand logo uploads, original capital, current balance/value, gain/loss and percentage return.
-- A common add/edit form, with optional quantity and unit-price calculation.
-- Per-investment percentage-performance chart, allocation chart, and saved portfolio-value history.
-- Daily profit/loss entries, account filters, monthly summaries, a clickable calendar, and a full activity log.
-- Deposits, withdrawals, and linked internal transfers between accounts, including manual cross-currency conversion.
-- Editable manual exchange rates, hidden-balance mode, JSON backup/restore and CSV ledger export.
-- Browser-storage error warnings, backup validation, and protection against overwriting another tab's changes while a form is open.
+## Everyday cash and bank accounts
 
-## A typical workflow
+Choose **Everyday cash / bank / wallet** for Binance cash, a local bank, a cash wallet or savings used for daily needs. The form asks for one **Available balance right now**, not an opening investment and return.
 
-1. Add a cash asset for money that is not invested. Enter the amount as both investment and current value.
-2. Add each trading account or investment separately. Enter its contributed capital and what it is worth now.
-3. Choose **Log P&L** on an account to record a new result. A profit of 100 increases that account's balance by 100 in its own currency. A loss decreases it.
-4. Use **Transfer** to move money already tracked in your cash account to a trading account. The two balances change, but the included portfolio total does not increase just because money moved.
-5. Use **Deposit** or **Withdrawal** only for capital entering or leaving the tracked accounts. These do not create trading profit.
-6. Export a JSON backup regularly, especially before deleting data, changing browser, moving the local file or clearing browser storage.
+The card offers:
 
-Do not log a profit twice: a new P&L entry adds to the saved current balance. If your starting balance already includes a particular result, do not add it again.
+- **Money in** for salary, freelance income, refunds, gifts and other money arriving from outside the tracked accounts.
+- **Spend / Money out** for shopping, bills, family support and other payments. Add a category, person or merchant, date and note.
+- **Transfer** only for movement between two of your own accounts already tracked in Vault. Both balances are updated together.
 
-## How the calculations work
+A gift to family is Money out under Family & friends. Money that a friend is expected to return belongs in Loans instead. Do not log the same transaction in both places.
 
-All source amounts are entered in each asset's own currency. A conversion rate means:
+The Everyday money page has a monthly selector, account selector, money-in/out totals, a category breakdown and transaction history. Monthly flow totals exclude transfers, loan movements and balance corrections. Loan interest/fees remain with the loan's repayment record, not the everyday flow report.
 
-    1 unit of the account currency = X USDT
+Cash accounts never show investment ROI. Legacy cash entries labeled Profit or Loss are preserved in the backup and shown as Money in (legacy) or Money out (legacy); they are excluded from the investment profit tracker. These labels do not invent categories for older transactions.
 
-USDT is fixed at 1 as the base unit. The initial USD rate is also 1 solely as a user-editable convenience, not a market quote or a guaranteed peg. No other live or suggested rates are provided.
+Editing a cash balance records a balance correction. It does not invent an expense or income record. For normal daily use, record individual movements instead of repeatedly overwriting the balance.
 
-For each account:
+## Investment accounts
 
-    current value = opening value + all logged value changes
-    net capital = opening investment + deposits + transfers in
-                  - withdrawals - transfers out + capital corrections
-    profit/loss = current value - net capital
+Forex, crypto, stock and other investment accounts retain the opening-investment and current-value fields, uploaded logos, quantity-times-price helper, P&L logging and return chart.
 
-The asset's simple percentage return divides profit/loss by opening capital plus deposits and transfers in, including opening-capital corrections. The headline percentage uses opening capital plus external deposits so internal transfers are not counted twice in that denominator. A percentage is unavailable when its capital denominator is zero.
+A new P&L entry changes the current saved balance. Log a result only when it is not already included in that balance. Use Transfer when funding an investment from another account tracked here rather than logging an external deposit as well.
 
-These are simple accounting comparisons, not tax, time-weighted or audited performance figures. Current totals and account gains are translated using the current saved conversion rate. Currency-exchange gains on historical capital are not separately modeled. Daily entries preserve the conversion rate used when recorded.
+Prop/demo balances remain excluded from personal totals by default.
 
-Editing an account's current value creates a valuation adjustment in the activity log, rather than silently overwriting its existing daily entries. Quantity multiplied by unit price is an optional button that fills the current-value field; it is not a continuously recalculating price feed.
+## Loans: borrowing and lending
 
-The portfolio-value chart stores the most recent value saved on each day you change the workspace. It is a valuation history, not a return chart. A backdated daily entry changes today's current balance and is listed on the date you selected in the daily tracker; it does not reconstruct historical valuations. The app does not run background jobs when it is closed.
+Use **I borrowed money** for a liability and **I lent money** for money someone owes you. Each record tracks a person or company, label, currency, original principal, principal outstanding when tracking started, start date, next due date and notes.
 
-## Privacy, storage and scope
+### Existing loan
 
-Data is stored in this browser, not in a cloud account. Browser permissions determine whether local saving is available. If saving is blocked or full, the app warns you; export a backup before closing the tab. Local-file storage may differ by browser and file location. Keep backups, and use a stable location for the file.
+Enter the original principal and the amount currently unpaid. Leave **This is new money. Update a cash account now** OFF. This adds the outstanding debt or receivable without adding or deducting the cash a second time.
 
-There is no sign-in, password protection, encryption, exchange connection, bank connection, live market feed, automatic device sync or automatic backup. Someone with access to the same browser profile may be able to see the data. JSON backups include your profile photo and logos and are not encrypted. Never enter credentials, bank passwords, API secrets, recovery phrases or private keys.
+For example, an original loan of 1,000 with 600 still unpaid starts at 600 outstanding. The 400 already repaid is shown in the history summary; the app does not invent dates or individual transactions for it.
 
-The gold badge is a visual personal-profile badge, not identity verification by a third party. Prop/demo accounts are excluded from net worth by default; real received payouts can be tracked separately.
+### New borrowing or lending
 
-Importing a backup replaces the entire current workspace after confirmation. Deleting an entry reverses its effect. Deleting either side of an internal transfer reverses both sides; reversals that would create a negative balance are blocked.
+Turn the cash-movement option ON and choose an included everyday account. New borrowing increases that cash balance and the liability together. New lending reduces cash and adds a receivable. For this option, the original principal and outstanding principal must be equal.
 
-## Source files
+### Repayments
 
-- `index.html`: document shell, navigation and inline icon symbols.
-- `styles.css`: desktop, tablet and mobile layouts.
-- `app.js`: calculation model, storage, validation, forms, charts and exports.
+Open the loan and record **Principal repaid**, optional **Interest / fees**, date and optional next due date. Choose the cash account to pay from or receive into.
 
-The source can be served as a static website. Publishing these files does not add authentication, a database or synchronization; browser data remains local. Never place your backup JSON files in a public website folder.
+Only principal reduces the amount outstanding. Principal plus interest/fees is the cash movement. The app converts between loan and account currencies using your saved manual rates. A preview shows the resulting balances before saving.
 
-- `logo.svg`: your original uploaded white brand mark.
+Turn **Update my cash account balance** OFF only when recording a payment already included in the saved balance, or a historical payment through an untracked account. That record changes the outstanding loan without moving cash again.
+
+Interest is recorded as a paid amount, not automatically calculated or accrued. This is not an amortization engine or a lender statement. Outstanding principal reaching zero marks the loan fully repaid; unrecorded interest is not tracked as a separate liability.
+
+The next due date is manual. Blank in the repayment form clears it; a full principal repayment clears it automatically. Overdue and due-today labels appear when you open or refresh the app. There are no background notifications or automatic payments.
+
+### Correcting mistakes
+
+Repayment history has a reverse action. Reversing removes both the principal reduction and its linked cash movement, including recorded interest. Deleting a linked payment from Activity opens the same reversal flow rather than leaving an orphaned loan record.
+
+Deleting a loan reverses its linked cash entries and removes its repayment history after confirmation. Operations that would make a current account balance negative are blocked. Accounts with linked loan movements cannot be deleted until those links have been removed through the loan workflow.
+
+Financial loan fields are locked after repayments or cash movements exist; label, person, notes and due date remain editable. Reverse incorrect records before replacing them.
+
+## Totals and calculations
+
+- **Estimated total value**: included current cash and investment balances, converted into USDT. Loan principal is shown separately.
+- **Net worth**: estimated total value + outstanding principal owed to you - outstanding principal you owe.
+- **Investment P&L**: sum of current value minus net contributed capital for included non-cash assets. Everyday spending, income and loan movements are excluded.
+- **Investment return**: each investment's P&L divided by its contributed capital. This is simple bookkeeping, not a time-weighted or tax return.
+- **Cash flow**: recorded everyday money in minus money out for the selected month. It is not trading profit and is not a historical cash balance.
+
+Illustrative examples:
+
+- 758 cash minus a 100 purchase = 658 cash. No investment loss is created.
+- Moving 100 between two included accounts changes neither total assets nor net worth, subject to the saved conversion rates and rounding.
+- Borrowing 500 into tracked cash increases cash by 500 and debt by 500; principal alone creates no net worth.
+- Paying 100 principal and 5 interest reduces cash by 105, debt by 100 and net worth by 5. Investment P&L does not change.
+
+Receivables are valued at recorded outstanding principal; this is not a guarantee of repayment. Manually entered rates determine current USDT valuations. Entry reports use the conversion rate saved when the entry was recorded. No live prices, bank integrations or exchange connections are included.
+
+Daily history snapshots record the included asset total at the time of an edit. They are not a net-worth chart or reconstructed historical bank statement. Backdated entries affect the current balance when saved, and do not rebuild past valuation snapshots.
+
+## Backups and privacy
+
+Use **Export JSON** for a complete backup, including loans and repayments. Activity CSV and Loans CSV are additional human-readable records, not substitutes for a restorable JSON backup. Imports replace the current workspace after confirmation.
+
+Data and backups are not encrypted by the app. Do not enter private keys, seed phrases, bank passwords or account credentials. The profile badge is decorative, not identity verification. Hide balances affects the dashboard display; editing forms, exports and some explicit detail dialogs reveal actual amounts.
+
+The application does not send network requests. Data is stored only in the current browser unless you export it. Storage failures produce a warning; export a backup before closing the page when saving is unavailable.
+
+## Implementation and checks
+
+The application uses plain HTML, CSS, SVG and JavaScript, with no build system or external dependencies. Calculations are rounded to eight decimal places. This is a personal tracking tool, not audited financial software.
+
+The accompanying test report records 58 automated checks covering old-backup migration, cash flows, investment separation, transfers, borrowing, lending, repayments, interest, reversal safety, manual conversions, JSON export/reload, profile editing, and layout widths from 360 to 1280 pixels. Additional demo screenshots were inspected at desktop and phone sizes.
+
+The restricted testing browser rendered the authored HTML directly, using an in-memory Storage API test double. JSON was exported and reloaded in a fresh document. Native storage persistence in your particular local-file browser environment was not tested; regular exported backups remain essential.
