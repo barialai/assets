@@ -34,7 +34,7 @@ const round = n => Math.round((n+Number.EPSILON)*1e8)/1e8;
 const dateLabel = (date,options={month:'short',day:'numeric'}) => dateObj(date).toLocaleDateString('en-US',options);
 const today = () => localDate();
 let storageOk = true, corruptRaw = '', persistenceBlocked = false, modalDraft = null, pendingExternal = null;
-let ui = {page:['overview','cash','loans','tracker','activity','settings'].includes(location.hash.slice(1))?location.hash.slice(1):'overview',assetFilter:'all',assetQuery:'',period:'30D',openMenu:null,trackerAccount:'',trackerDate:'',month:new Date(new Date().getFullYear(),new Date().getMonth(),1),activityAccount:'',activityKind:'all',activityQuery:'',activityPage:1,cashMonth:today().slice(0,7),cashAccount:'',loanFilter:'all',loanQuery:'',chartPoints:[]};
+let ui = {page:['overview','cash','loans','tracker','activity','settings','backup'].includes(location.hash.slice(1))?location.hash.slice(1):'overview',assetFilter:'all',assetQuery:'',period:'30D',openMenu:null,trackerAccount:'',trackerDate:'',month:new Date(new Date().getFullYear(),new Date().getMonth(),1),activityAccount:'',activityKind:'all',activityQuery:'',activityPage:1,cashMonth:today().slice(0,7),cashAccount:'',loanFilter:'all',loanQuery:'',chartPoints:[]};
 function blankState() {return {version:VERSION,demo:false,profile:{name:'Nawab',subtitle:'Personal portfolio',photo:'',badge:true},settings:{displayCurrency:'USDT',hideBalances:false,rates:{USDT:1,USD:1},lastBackup:null},assets:[],entries:[],loans:[],loanPayments:[],snapshots:[{date:today(),value:0}],updatedAt:new Date().toISOString()};}
 function sampleState() {
   const s=blankState();s.demo=true;
@@ -153,17 +153,21 @@ function commit(message,{snapshot=true}={}){if(snapshot)totalSnapshot();const sa
 function saveHeader(){const el=$('#save-status');el.classList.toggle('error',!storageOk);el.innerHTML=`<span></span> ${storageOk?'Saved on this device':'Not saved - export a backup'}`;el.title=storageOk?'Stored in this browser only. Export a backup before changing browser or clearing site data.':'Browser storage is blocked, full, or unreadable. Your latest changes exist only in this tab.';}
 function optionsCurrencies(selected){return Object.keys(state.settings.rates).map(c=>`<option value="${esc(c)}" ${c===selected?'selected':''}>${esc(c)}</option>`).join('');}
 function render(){
-  const pages={overview:'Overview',cash:'Everyday money',loans:'Loans',tracker:'Daily tracker',activity:'Activity log',settings:'Settings'};
+  const pages={overview:'Overview',cash:'Everyday money',loans:'Loans',tracker:'Daily tracker',activity:'Activity log',settings:'Settings',backup:'Backups'};
   $('#breadcrumb-current').textContent=pages[ui.page];saveHeader();
   $('#display-currency').innerHTML=optionsCurrencies(state.settings.displayCurrency);
   $('#sidebar-profile').innerHTML=`${avatar('small')}<span><strong>${esc(state.profile.name)}</strong><small>Personal account</small></span>${icon('chevron')}`;
   $$('.nav-item[data-page]').forEach(el=>{el.classList.toggle('active',el.dataset.page===ui.page);el.setAttribute('aria-current',el.dataset.page===ui.page?'page':'false');});
-  const main=$('#main');main.innerHTML=(ui.page==='overview'?overview():ui.page==='cash'?cashPage():ui.page==='loans'?loansPage():ui.page==='tracker'?trackerPage():ui.page==='activity'?activityPage():settingsPage());
+  const main=$('#main');main.innerHTML=(ui.page==='overview'?overview():ui.page==='cash'?cashPage():ui.page==='loans'?loansPage():ui.page==='tracker'?trackerPage():ui.page==='activity'?activityPage():ui.page==='backup'?backupPage():settingsPage());
   if(ui.page==='overview')drawPortfolioChart();
-  bindSearchInputs();
+  bindSearchInputs();enhanceUI(main);updateMobileNav();
 }
-function setPage(page){if(!['overview','cash','loans','tracker','activity','settings'].includes(page))return;ui.page=page;ui.openMenu=null;location.hash=page;closeNav();render();window.scrollTo({top:0,behavior:'instant'});}
-function demoBanner(){return state.demo?`<div class="demo-banner"><div>${icon('info')}<span><strong>Demo workspace.</strong> These are sample balances and history, not your assets.</span></div><button data-action="start-fresh">Start fresh ${icon('arrow-right')}</button></div>`:'';}
+function setPage(page){
+  if(!['overview','cash','loans','tracker','activity','settings','backup'].includes(page))return;
+  if($('#modal').open)closeModal();
+  ui.page=page;ui.openMenu=null;location.hash=page;closeNav();render();window.scrollTo({top:0,behavior:'instant'});
+}
+function demoBanner(){return state.demo?`<div class="demo-banner"><div>${icon('info')}<span><strong>Demo workspace.</strong> Sample balances, not your real assets.</span></div><button data-action="start-fresh">Start fresh ${icon('arrow-right')}</button></div>${ui.page==='overview'?`<div class="backup-entry-banner"><div>${icon('folder')}<div><strong>Already have a workspace?</strong><p>Restore your backup to continue where you left off.</p></div></div><button class="btn btn-secondary btn-small" data-action="import">${icon('upload')}Restore backup</button></div>`:''}`:'';}
 function overview(){
   const t=totals(),curr=state.settings.displayCurrency,daily=dayPnl(today());
   return `${demoBanner()}${!storageOk?`<div class="inline-note warning" style="margin-bottom:18px">${icon('info')}<span>${persistenceBlocked?'Saved data could not be read and has not been overwritten. Open Settings to export a recovery copy.':'Browser saving is unavailable. Export your data before closing this tab.'}</span></div>`:''}
@@ -206,11 +210,17 @@ function activityFiltered(){return state.entries.filter(e=>{
 }).sort(sortEntries);}
 function activityContents(){const rows=activityFiltered(),per=15,pages=Math.max(1,Math.ceil(rows.length/per));ui.activityPage=Math.min(pages,ui.activityPage);return ledgerTable(rows.slice((ui.activityPage-1)*per,ui.activityPage*per),{emptyMessage:'Your money in, spending, transfers, loan movements and investment results will appear here.'})+`<div class="table-footer"><span>${rows.length} ledger ${rows.length===1?'entry':'entries'}</span><div class="pagination"><button class="btn btn-ghost btn-small" data-action="activity-page" data-delta="-1" ${ui.activityPage===1?'disabled':''}>Previous</button><span>${ui.activityPage} / ${pages}</span><button class="btn btn-ghost btn-small" data-action="activity-page" data-delta="1" ${ui.activityPage===pages?'disabled':''}>Next</button></div></div>`;}
 function activityPage(){return `${demoBanner()}<div class="page-heading"><div><h1>Activity log</h1><p>A complete record of changes to your accounts.</p></div><div class="section-actions"><button class="btn btn-secondary" data-action="export-csv">${icon('download')}Export CSV</button><button class="btn btn-primary" data-action="entry">${icon('plus')}Add entry</button></div></div><section class="panel"><div class="filter-row"><select class="input" id="activity-account" aria-label="Filter activity by account"><option value="">All accounts</option>${accountOptions(ui.activityAccount,false)}</select><select class="input" id="activity-kind" aria-label="Filter activity by type">${[['all','All activity'],['pnl','Profits & losses'],['capital','Cash movements'],['loans','Loan movements'],['updates','Value / capital updates']].map(([k,v])=>`<option value="${k}" ${k===ui.activityKind?'selected':''}>${v}</option>`).join('')}</select><label class="search-field">${icon('search')}<input type="search" id="activity-search" placeholder="Search notes or accounts..." value="${esc(ui.activityQuery)}" aria-label="Search activity"></label></div><div id="activity-content">${activityContents()}</div></section><div class="inline-note" style="margin:18px 0 25px">${icon('info')}<span>Deleting an entry reverses its effect on the balance and capital. A transfer's two linked entries are always removed together. Entry amounts use the exchange rate saved when they were recorded.</span></div>`;}
-function settingsPage(){return `<div class="page-heading"><div><h1>Your workspace, your way.</h1><p>Profile, currencies and a safe copy of your records.</p></div></div><div class="settings-grid"><div class="settings-stack"><section class="panel settings-panel"><h3>Profile &amp; appearance</h3><p>Make this personal. Your profile stays on this device.</p><div class="settings-profile">${avatar('large')}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><p>${esc(state.profile.subtitle)}</p><button class="btn btn-secondary btn-small" data-action="profile">${icon('edit')}Edit profile</button></div></div><div class="toggle-row"><div><strong>Show profile badge</strong><p>A personal display badge only. It does not represent identity or financial verification.</p></div><label class="toggle"><input id="setting-badge" type="checkbox" ${state.profile.badge?'checked':''} aria-label="Show profile badge"><span class="toggle-track"></span></label></div><div class="toggle-row"><div><strong>Hide balances</strong><p>Conceal amounts on the dashboard. Forms and backups still contain your real values.</p></div><label class="toggle"><input id="setting-hide" type="checkbox" ${state.settings.hideBalances?'checked':''} aria-label="Hide balances"><span class="toggle-track"></span></label></div><div class="field" style="border-top:1px solid #303030;padding-top:18px"><label for="setting-display">Display currency</label><select id="setting-display" class="input">${optionsCurrencies(state.settings.displayCurrency)}</select><p class="field-help">Cards and reports use this currency. Your headline total always remains in USDT.</p></div></section><section class="panel settings-panel" id="backup-section"><h3>Backup &amp; restore</h3><p>Browser data can be cleared. Keep regular backups somewhere safe.</p><div class="inline-note">${icon('shield')}<span>Stored locally in this browser, not in a cloud account. Backups are plain JSON, not encrypted. Do not upload passwords, account credentials or private keys.</span></div>${corruptRaw?`<div class="setting-action"><div><strong class="negative">Saved data needs recovery</strong><p>Your original saved data has not been overwritten.</p></div><button class="btn btn-secondary btn-small" data-action="recovery">Export recovery copy</button></div>`:''}<div class="setting-action"><div><strong>Export a full backup</strong><p>Includes assets, everyday transactions, loans, repayments, profile, logos, settings and history.</p></div><button class="btn btn-secondary btn-small" data-action="export">${icon('download')}Export JSON</button></div><div class="setting-action"><div><strong>Restore from backup</strong><p>Replaces this workspace. Export your current records first.</p></div><button class="btn btn-secondary btn-small" data-action="import">${icon('upload')}Import JSON</button></div><div class="setting-action"><div><strong>Export your activity</strong><p>A CSV of your complete ledger for your own records.</p></div><button class="btn btn-secondary btn-small" data-action="export-csv">${icon('download')}Export CSV</button></div><p class="field-help" style="margin:12px 0 0">Last backup: ${state.settings.lastBackup?new Date(state.settings.lastBackup).toLocaleString():'No backup exported yet'}</p></section></div><div class="settings-stack"><section class="panel settings-panel"><h3>Currency conversions</h3><p>Set how much <strong>1 unit</strong> of a currency is worth in USDT. These rates are manual, not live.</p><form id="rates-form"><div class="rate-row"><div><strong>USDT</strong><small>Base currency</small></div><input class="input" value="1" disabled aria-label="USDT base exchange rate"><span></span></div>${Object.entries(state.settings.rates).filter(([c])=>c!=='USDT').map(([c,r])=>`<div class="rate-row"><div><strong>${esc(c)}</strong><small>1 ${esc(c)} = ${esc(r)} USDT</small></div><input class="input" type="number" min="0.000000000001" max="1000000000000" step="any" required value="${r}" data-rate="${esc(c)}" aria-label="USDT value of one ${esc(c)}"><button type="button" class="icon-button" data-action="delete-currency" data-currency="${esc(c)}" aria-label="Remove ${esc(c)}">${icon('trash')}</button></div>`).join('')}<div class="settings-actions"><button class="btn btn-primary btn-small" type="submit">${icon('check')}Save rates</button><button class="btn btn-secondary btn-small" type="button" data-action="add-currency">${icon('plus')}Add currency</button></div></form><p class="field-help" style="margin-top:16px">The initial USD rate assumes 1 USD = 1 USDT for convenience. It is not a live quote or a guaranteed peg. Replace it with your chosen valuation rate.</p></section><section class="panel settings-panel"><h3>How your totals work</h3><div class="about-copy"><p><strong>Total value</strong> is the current value of every included asset, converted into USDT.</p><p><strong>Investment profit / loss</strong> is investment value minus net contributions. Cash accounts, everyday income, spending and loan movements are excluded.</p><p><strong>Net worth</strong> = included cash and investments + outstanding money owed to you - outstanding loans you owe. Loans use recorded principal, not expected interest or a guarantee of recovery.</p><p><strong>Cash accounts</strong> show available money, not investment return. The money-in/out report excludes transfers, balance corrections and loan movements.</p><p><strong>Percentage return</strong> is gain divided by contributed capital. It is a simple accounting return, not a time-weighted or tax calculation.</p><p><strong>Prop and demo balances</strong> are excluded by default. They are not automatically your personal assets. Track real, received payouts separately.</p><p><strong>Charts</strong> use saved valuations and manually logged results. No market data, exchange connection or background price updating is included.</p></div></section><section class="panel settings-panel"><h3>Workspace data</h3><p>${state.assets.length} assets &middot; ${state.entries.length} ledger entries &middot; ${state.loans.length} loans &middot; ${state.snapshots.length} valuation snapshots</p><div class="settings-actions"><button class="btn btn-secondary btn-small" data-action="load-demo">Load sample data</button><button class="btn btn-danger btn-small" data-action="start-fresh">${icon('trash')}Clear workspace</button></div></section></div></div>`;}
+function settingsPage(){return `<div class="page-heading"><div><h1>Your workspace, your way.</h1><p>Profile, currencies and a safe copy of your records.</p></div></div><div class="settings-grid"><div class="settings-stack"><section class="panel settings-panel"><h3>Profile &amp; appearance</h3><p>Make this personal. Your profile stays on this device.</p><div class="settings-profile">${avatar('large')}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><p>${esc(state.profile.subtitle)}</p><button class="btn btn-secondary btn-small" data-action="profile">${icon('edit')}Edit profile</button></div></div><div class="toggle-row"><div><strong>Show profile badge</strong><p>A personal display badge only. It does not represent identity or financial verification.</p></div><label class="toggle"><input id="setting-badge" type="checkbox" ${state.profile.badge?'checked':''} aria-label="Show profile badge"><span class="toggle-track"></span></label></div><div class="toggle-row"><div><strong>Hide balances</strong><p>Conceal amounts on the dashboard. Forms and backups still contain your real values.</p></div><label class="toggle"><input id="setting-hide" type="checkbox" ${state.settings.hideBalances?'checked':''} aria-label="Hide balances"><span class="toggle-track"></span></label></div><div class="field" style="border-top:1px solid #303030;padding-top:18px"><label for="setting-display">Display currency</label><select id="setting-display" class="input">${optionsCurrencies(state.settings.displayCurrency)}</select><p class="field-help">Cards and reports use this currency. Your headline total always remains in USDT.</p></div></section><section class="panel settings-panel" id="backup-section"><h3>Backup &amp; restore</h3><p>Keep a complete copy of your workspace and continue on another device.</p><div class="inline-note">${icon('shield')}<span>JSON backups include your accounts, loans, repayments, photos and settings. Keep these unencrypted files private.</span></div><div class="settings-actions"><button class="btn btn-primary" data-action="open-backup">${icon('folder')}Open backup center</button><button class="btn btn-secondary" data-action="import">${icon('upload')}Restore backup</button></div><p class="field-help" style="margin-top:17px">Last backup prepared: ${state.settings.lastBackup?esc(formatStamp(state.settings.lastBackup)):'Not yet'}</p></section></div><div class="settings-stack"><section class="panel settings-panel"><h3>Currency conversions</h3><p>Set how much <strong>1 unit</strong> of a currency is worth in USDT. These rates are manual, not live.</p><form id="rates-form"><div class="rate-row"><div><strong>USDT</strong><small>Base currency</small></div><input class="input" value="1" disabled aria-label="USDT base exchange rate"><span></span></div>${Object.entries(state.settings.rates).filter(([c])=>c!=='USDT').map(([c,r])=>`<div class="rate-row"><div><strong>${esc(c)}</strong><small>1 ${esc(c)} = ${esc(r)} USDT</small></div><input class="input" type="number" min="0.000000000001" max="1000000000000" step="any" required value="${r}" data-rate="${esc(c)}" aria-label="USDT value of one ${esc(c)}"><button type="button" class="icon-button" data-action="delete-currency" data-currency="${esc(c)}" aria-label="Remove ${esc(c)}">${icon('trash')}</button></div>`).join('')}<div class="settings-actions"><button class="btn btn-primary btn-small" type="submit">${icon('check')}Save rates</button><button class="btn btn-secondary btn-small" type="button" data-action="add-currency">${icon('plus')}Add currency</button></div></form><p class="field-help" style="margin-top:16px">The initial USD rate assumes 1 USD = 1 USDT for convenience. It is not a live quote or a guaranteed peg. Replace it with your chosen valuation rate.</p></section><section class="panel settings-panel"><h3>How your totals work</h3><div class="about-copy"><p><strong>Total value</strong> is the current value of every included asset, converted into USDT.</p><p><strong>Investment profit / loss</strong> is investment value minus net contributions. Cash accounts, everyday income, spending and loan movements are excluded.</p><p><strong>Net worth</strong> = included cash and investments + outstanding money owed to you - outstanding loans you owe. Loans use recorded principal, not expected interest or a guarantee of recovery.</p><p><strong>Cash accounts</strong> show available money, not investment return. The money-in/out report excludes transfers, balance corrections and loan movements.</p><p><strong>Percentage return</strong> is gain divided by contributed capital. It is a simple accounting return, not a time-weighted or tax calculation.</p><p><strong>Prop and demo balances</strong> are excluded by default. They are not automatically your personal assets. Track real, received payouts separately.</p><p><strong>Charts</strong> use saved valuations and manually logged results. No market data, exchange connection or background price updating is included.</p></div></section><section class="panel settings-panel"><h3>Workspace data</h3><p>${state.assets.length} assets &middot; ${state.entries.length} ledger entries &middot; ${state.loans.length} loans &middot; ${state.snapshots.length} valuation snapshots</p><div class="settings-actions"><button class="btn btn-secondary btn-small" data-action="load-demo">Load sample data</button><button class="btn btn-danger btn-small" data-action="start-fresh">${icon('trash')}Clear workspace</button></div></section></div></div>`;}
 function bindSearchInputs(){const l=$('#loan-search');if(l)l.addEventListener('input',e=>{ui.loanQuery=e.target.value;$('#loan-list').innerHTML=loanCards();});const s=$('#asset-search');if(s)s.addEventListener('input',e=>{ui.assetQuery=e.target.value;ui.openMenu=null;$('#asset-grid').innerHTML=assetCards();});const a=$('#activity-search');if(a)a.addEventListener('input',e=>{ui.activityQuery=e.target.value;ui.activityPage=1;$('#activity-content').innerHTML=activityContents();});}
 function modalHeader(title,description=''){return `<div class="modal-header"><div><h2>${title}</h2>${description?`<p>${description}</p>`:''}</div><button class="icon-button" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button></div>`;}
-function showModal(html,narrow=false){const dialog=$('#modal');dialog.classList.toggle('narrow',narrow);$('#modal-content').innerHTML=html;if(!dialog.open)dialog.showModal();dialog.scrollTop=0;}
-function closeModal(){const d=$('#modal');if(d.open)d.close();modalDraft=null;}
+function showModal(html,narrow=false){
+  closeDatePicker(false);
+  const dialog=$('#modal');dialog.classList.toggle('narrow',narrow);
+  $('#modal-content').innerHTML=html;dialog.classList.toggle('form-modal',Boolean($('#modal-content form')));
+  enhanceUI($('#modal-content'));document.body.classList.add('modal-open');
+  if(!dialog.open)dialog.showModal();dialog.scrollTop=0;
+}
+function closeModal(){closeDatePicker(false);const d=$('#modal');if(d.open)d.close();modalDraft=null;if(!$('#date-picker')?.open)document.body.classList.remove('modal-open');}
 function formError(message){const box=$('#form-error');if(box){box.textContent=message;box.scrollIntoView({block:'nearest'});}else toast(message,true);}
 function confirmAction(title,body,button,fn,danger=true){modalDraft={type:'confirm',run:fn};showModal(`${modalHeader(title)}<div class="modal-body"><div class="about-copy" style="margin-top:-6px">${body}</div></div><div class="modal-footer"><button class="btn btn-secondary" data-action="close-modal">Cancel</button><button class="btn ${danger?'btn-danger':'btn-primary'}" data-action="confirm">${button}</button></div>`,true);}
 function openAsset(id='',category='cash'){
@@ -294,12 +304,29 @@ function deleteAsset(id){const a=assetById(id);if(!a)return;if(state.entries.som
 }
 function deleteEntry(id){const e=state.entries.find(e=>e.id===id);if(!e)return;if(e.paymentId){reverseLoanPayment(e.paymentId);return;}if(e.loanId){deleteLoan(e.loanId);return;}const group=e.groupId?state.entries.filter(x=>x.groupId===e.groupId):[e],a=assetById(e.assetId);confirmAction(e.groupId?'Reverse this transfer?':'Delete this entry?',`<p>${e.groupId?'Both sides of this transfer will be reversed.':`The ${esc(KIND[e.kind].label.toLowerCase())} of <strong>${esc(moneyNative(e.amount,a.currency,{reveal:true}))} ${esc(a.currency)}</strong> for ${esc(a.name)} will be removed.`}</p><p>Account balances and investment totals are recalculated automatically.</p>`,'Delete & reverse',()=>{for(const asset of state.assets){const affected=group.filter(x=>x.assetId===asset.id);if(!affected.length)continue;const newBalance=metrics(asset).value-affected.reduce((s,x)=>s+effect(x).value,0);if(newBalance<-.00000001){closeModal();toast('Reversing this entry would make '+asset.name+' negative. Remove dependent withdrawals or losses first.',true);return;}}const ids=new Set(group.map(x=>x.id));state.entries=state.entries.filter(x=>!ids.has(x.id));closeModal();commit(e.groupId?'Transfer reversed. Both balances updated.':'Entry removed and balance restored.');});}
 function downloadBlob(filename,text,mime='application/json'){const blob=new Blob([text],{type:mime+';charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);}
-function exportBackup(){state.settings.lastBackup=new Date().toISOString();persist();downloadBlob('vault-backup-'+today()+'.json',JSON.stringify(state,null,2));render();toast('Backup prepared. Keep the JSON file somewhere safe.');}
+function exportBackup(){
+  try{
+    const prepared=transferableState();
+    downloadBlob(prepared.name,prepared.text);
+    if(ui.page==='backup'||ui.page==='settings')render();else saveHeader();
+    toast('Backup file prepared. Save it to Files or Downloads before leaving this device.'+(!storageOk?' Browser saving is unavailable, so keep this file.':''),!storageOk);
+  }catch(err){toast(err.message,true);}
+}
 function csvCell(value){let str=String(value??'');if(/^[=+@\-\t\r]/.test(str))str="'"+str;return '"'+str.replace(/"/g,'""')+'"';}
 function exportCSV(){const headers=['Date','Account','Category','Included in net worth','Type','Currency','Amount (native)','Value change (native)','Capital change (native)','USDT rate at entry','Value change (USDT at entry)','Note','Entry ID','Transfer group','Everyday category','Person / merchant','Loan ID','Repayment ID'];const rows=[headers.map(csvCell).join(',')];for(const e of [...state.entries].sort(sortEntries)){const a=assetById(e.assetId),delta=effect(e);rows.push([e.date,a?.name||'',a?.category||'',a?.included?'Yes':'No',KIND[e.kind].label,a?.currency||'',e.amount,delta.value,delta.capital,e.fx,round(delta.value*e.fx),e.note,e.id,e.groupId,e.cashCategory||'',e.counterparty||'',e.loanId||'',e.paymentId||''].map((v,i)=>[6,7,8,9,10].includes(i)?String(v):csvCell(v)).join(','));}downloadBlob('vault-activity-'+today()+'.csv','\ufeff'+rows.join('\r\n'),'text/csv');toast('Activity CSV prepared.');}
-async function importBackup(file){if(!file)return;if(file.size>12*1024*1024){toast('This backup is larger than 12 MB and cannot be loaded.',true);return;}try{const incoming=validateState(JSON.parse(await file.text()));confirmAction('Restore this backup?',`<p>This backup contains <strong>${incoming.assets.length} assets</strong> and <strong>${incoming.entries.length} ledger entries</strong>, <strong>${incoming.loans.length} loans</strong> and <strong>${incoming.loanPayments.length} repayments</strong>.</p><p>It will replace everything in this workspace, including your profile, rates and charts. Export your current records first.</p>`,'Restore backup',()=>{state=incoming;persistenceBlocked=false;corruptRaw='';resetFilters();closeModal();commit('Backup restored.',{snapshot:false});},false);}catch(err){toast('Import stopped: '+err.message+' Your current data is unchanged.',true);}}
+async function importBackup(file){
+  if(!file)return;
+  if(file.size>12*1024*1024){toast('This backup is larger than 12 MB. Your current data is unchanged.',true);return;}
+  const attempt=++importSequence;
+  try{
+    const raw=await file.text();if(attempt!==importSequence)return;
+    const incoming=validateState(JSON.parse(raw.replace(/^\uFEFF/,'')));
+    restorePreview(incoming,file.name,file.size);
+  }catch(err){toast('Import stopped: '+err.message.slice(0,220)+' Your current data is unchanged.',true);}
+}
 function closeNav(){$('#sidebar').classList.remove('open');$('#sidebar-scrim').classList.remove('open');}
 function handleAction(action,el){
+  if(handleUpgradeAction(action,el))return;
   if(handleMoneyAction(action,el))return;
   if(action==='open-nav'){$('#sidebar').classList.add('open');$('#sidebar-scrim').classList.add('open');return;}
   if(action==='close-nav'){closeNav();return;}
@@ -329,12 +356,12 @@ function handleAction(action,el){
   if(action==='export'){exportBackup();return;}
   if(action==='export-csv'){exportCSV();return;}
   if(action==='import'){$('#import-file').click();return;}
-  if(action==='open-backup'){setPage('settings');setTimeout(()=>$('#backup-section')?.scrollIntoView({behavior:'smooth',block:'start'}),50);return;}
+  if(action==='open-backup'){setPage('backup');return;}
   if(action==='recovery'){downloadBlob('vault-recovery-'+today()+'.json',corruptRaw||'{}');return;}
   if(action==='add-currency'){openCurrency();return;}
   if(action==='delete-currency'){const c=el.dataset.currency;if(c==='USDT')return;if(state.assets.some(a=>a.currency===c)||state.loans.some(l=>l.currency===c)){toast('This currency is used by an account or loan and cannot be removed.',true);return;}confirmAction('Remove '+esc(c)+'?','<p>No accounts or loans use this currency. Its manual conversion rate will be removed.</p>','Remove currency',()=>{delete state.settings.rates[c];if(state.settings.displayCurrency===c)state.settings.displayCurrency='USDT';closeModal();commit('Currency removed.',{snapshot:false});});return;}
   if(action==='returns-help'){infoModal('Understanding your returns','<p><strong>Gain / loss = current value - net contributed capital.</strong> Withdrawals reduce net contributed capital, so withdrawing money is not treated as a loss.</p><p>For each asset, percentage return divides gain by opening capital plus later deposits and transfers in. The headline investment return excludes everyday cash accounts and divides investment gain by the sum of their contributed capital. Transfers between investments may count again in that denominator; this is not a time-weighted return.</p><p>Cash and excluded assets are left out of the comparison chart. A percentage is unavailable when contributed capital is zero.</p><p>Conversions use your saved manual rates. These are simple bookkeeping comparisons, not time-weighted, tax or audited performance calculations.</p>');return;}
-  if(action==='help'){infoModal('A clear view of your assets','<p><strong>1. Start with your own data.</strong> Remove the labeled sample workspace, then add your cash, trading accounts and investments.</p><p><strong>2. Choose the right account type.</strong> For Binance cash and bank accounts, choose Everyday cash / bank / wallet and enter only the available balance. For investments, enter initial capital and current value.</p><p><strong>3. Keep it current.</strong> Use Money in / Money out for cash, Profit / Loss for investments and Transfer between your own tracked accounts. Use Loans to track borrowing, lending and principal repayments. Link a cash account only when that movement is not already included in its balance.</p><p><strong>4. Keep a backup.</strong> Your data stays in this browser. It does not sync across devices, and clearing browser storage removes it. Export a JSON backup regularly.</p><p>There are no live prices or exchange connections. This dashboard does not ask for credentials, bank details or crypto keys. The gold badge is decorative, not external verification.</p>');return;}
+  if(action==='help'){infoModal('A clear view of your assets','<p><strong>1. Start with your own data.</strong> Remove the labeled sample workspace, then add your cash, trading accounts and investments.</p><p><strong>2. Choose the right account type.</strong> For Binance cash and bank accounts, choose Everyday cash / bank / wallet and enter only the available balance. For investments, enter initial capital and current value.</p><p><strong>3. Keep it current.</strong> Use Money in / Money out for cash, Profit / Loss for investments and Transfer between your own tracked accounts. Use Loans to track borrowing, lending and principal repayments. Link a cash account only when that movement is not already included in its balance.</p><p><strong>4. Keep a backup.</strong> Your data stays in this browser. Open Backup &amp; restore to download a complete JSON backup. On another device, open the website, upload the file, review it and confirm. This is a manual transfer, not cloud sync. Restore replaces that browser\'s workspace. Clearing browser storage removes local records.</p><p>There are no live prices or exchange connections. This dashboard does not ask for credentials, bank details or crypto keys. The gold badge is decorative, not external verification.</p>');return;}
 }
 /* Everyday-money and loan bookkeeping. No live rates, automatic interest, or bank access. */
 function cashCategories(kind){return kind==='income'?['Other income','Salary','Freelance / business','Gift received','Refund']:['Other spending','Shopping','Food & groceries','Family & friends','Rent & bills','Travel & transport','Health','Fees'];}
@@ -480,6 +507,291 @@ function handleMoneyAction(action,el){
   if(action==='loan-direction'&&modalDraft?.type==='loan'){modalDraft.direction=el.dataset.direction;$$('[data-action="loan-direction"]').forEach(x=>x.classList.toggle('active',x.dataset.direction===modalDraft.direction));$('#loan-person-label').textContent=modalDraft.direction==='borrowed'?'Who do you owe?':'Who owes you?';updateLoanPreview();return true;}
   return false;
 }
+// Interface upgrade. The ledger format stays at v2 for backup compatibility.
+const RECOVERY_KEY = STORAGE_KEY + '.before-restore';
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+let pickerSession = null;
+let importSequence = 0;
+
+function formatStamp(value){
+  const d=new Date(value);
+  return Number.isFinite(d.getTime())?d.toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Not recorded';
+}
+function sizeLabel(bytes){return bytes<1024?(bytes+' B'):bytes<1048576?((bytes/1024).toFixed(1)+' KB'):((bytes/1048576).toFixed(1)+' MB');}
+function hasWorkspaceData(s=state){return Boolean(s.assets.length||s.entries.length||s.loans.length||s.loanPayments.length);}
+function getRecovery(){try{const raw=localStorage.getItem(RECOVERY_KEY);if(!raw)return null;const r=JSON.parse(raw);if(!r||typeof r.raw!=='string')return null;return r;}catch{return null;}}
+function transferableState(){
+  if(persistenceBlocked)throw Error('Your saved workspace needs recovery. Export its recovery copy instead of an empty backup.');
+  state.settings.lastBackup=new Date().toISOString();
+  persist();
+  // Normalize optional empty fields so exports restore byte-for-byte as records.
+  const text=JSON.stringify(validateState(state),null,2);
+  const time=new Date(),suffix=[time.getHours(),time.getMinutes(),time.getSeconds()].map(v=>String(v).padStart(2,'0')).join('');
+  return {text,name:'vault-backup-'+today()+'_'+suffix+'.json'};
+}
+function backupPage(){
+  const recovery=getRecovery(),photos=(state.profile.photo?1:0)+state.assets.filter(a=>a.logo).length;
+  const canShare=typeof navigator.share==='function'&&typeof navigator.canShare==='function';
+  return `${demoBanner()}<div class="backup-hero"><div><div class="eyebrow">YOUR WORKSPACE, WITH YOU</div><h1>Pick up where<br>you left off.</h1><p>One file keeps your whole workspace together. Download it here, restore it on another device, and continue with the same accounts and history.</p></div><div class="backup-hero-icon">${icon('folder')}</div></div>
+  <div class="backup-status-strip"><span>${icon(storageOk?'shield':'info')}<strong>${storageOk?'Saved in this browser':'Browser storage needs attention'}</strong></span><span>${icon('clock')}Last backup prepared: <strong>${state.settings.lastBackup?esc(formatStamp(state.settings.lastBackup)):'Not yet'}</strong></span></div>
+  ${recovery?`<div class="backup-undo"><div><strong>A pre-restore copy is available</strong><p>Saved in this browser on ${esc(formatStamp(recovery.savedAt))}. Review it before replacing anything.</p></div><button class="btn btn-secondary" data-action="review-recovery">${icon('clock')}Review previous workspace</button></div>`:''}
+  ${corruptRaw?`<div class="inline-note warning" style="margin-bottom:20px">${icon('info')}<span>Your earlier browser data could not be read. It has not been overwritten. <button class="text-link" data-action="recovery">Download the recovery copy</button> before restoring a different file.</span></div>`:''}
+  <div class="backup-grid">
+    <section class="backup-card download-card"><div class="backup-card-label"><span class="backup-icon">${icon('download')}</span><span class="backup-step-label">01 / KEEP A COPY</span></div><h2>Download your workspace</h2><p>A complete JSON backup, not just a report. Your records, pictures and settings all travel together.</p>
+      <div class="backup-content-list"><span>${icon('check')}Accounts &amp; balances</span><span>${icon('check')}Loans &amp; repayments</span><span>${icon('check')}Income &amp; spending</span><span>${icon('check')}Trading &amp; value history</span><span>${icon('check')}Profile photo &amp; logos</span><span>${icon('check')}Currency settings</span></div>
+      <div class="backup-card-bottom"><button class="btn btn-primary" data-action="export">${icon('download')}Download full backup</button>${canShare?'<button class="btn btn-secondary" data-action="share-backup">'+icon('upload')+'Share / save backup</button>':''}<p class="backup-file-caption">${state.assets.length} accounts &middot; ${state.loans.length} loans &middot; ${photos} saved ${photos===1?'image':'images'}<br>Save the file in a private folder you can find again.</p></div>
+    </section>
+    <section class="backup-card"><div class="backup-card-label"><span class="backup-icon">${icon('upload')}</span><span class="backup-step-label">02 / CONTINUE ANYWHERE</span></div><h2>Restore your workspace</h2><p>Choose the latest backup from your phone or computer. Review the file before replacing this browser's workspace.</p>
+      <button class="backup-drop" data-action="import" data-backup-drop aria-label="Choose a JSON backup to restore">${icon('folder')}<strong>Choose your backup file</strong><span>Tap to browse, or drop a .json file here</span><span>Vault v1 / v2 &middot; Up to 12 MB</span></button>
+      <div class="backup-card-bottom"><button class="btn btn-secondary" data-action="import">${icon('upload')}Upload &amp; review backup</button><p class="backup-file-caption">Read locally. No bank connection or server upload.<br>Nothing changes until you confirm the restore.</p></div>
+    </section>
+  </div>
+  <div class="backup-bottom-grid"><section class="panel"><h3>From your computer to your phone.</h3><p>The same process works in either direction.</p><div class="backup-how">
+      <div class="backup-how-step"><span>1</span><div><strong>Download the latest backup</strong><p>Finish saving any open form, then download your workspace from this page.</p></div></div>
+      <div class="backup-how-step"><span>2</span><div><strong>Move the file privately</strong><p>Use your own Files folder, private cloud storage or a direct device transfer. The file contains your financial records.</p></div></div>
+      <div class="backup-how-step"><span>3</span><div><strong>Open Vault, then restore</strong><p>On the other device, open this website in a browser, go to Backups, choose the file and confirm. Your profile and history come back too.</p></div></div>
+    </div></section><section class="panel"><h3>Your data stays yours.</h3><p>Saving in the browser and downloading a backup are different things. Keep both.</p><div class="backup-tools"><button class="btn btn-secondary" data-action="export-csv">${icon('download')}Export account activity as CSV</button><button class="btn btn-secondary" data-action="export-loans">${icon('download')}Export loans as CSV</button></div><p class="field-help">CSV files are reports only. Use the full JSON backup to restore a workspace.</p><div class="backup-caution"><strong>No automatic cloud sync.</strong> Restore replaces this browser's records; it does not merge two devices. Download a fresh backup after making changes, and restore that file before continuing elsewhere.<br><br><strong>Backups are not encrypted.</strong> Keep them private. Clearing browser data removes local records and any local pre-restore copy, but not files you have saved separately.</div></section></div>`;
+}
+function restorePreview(incoming,filename,bytes,isRecovery=false){
+  closeDatePicker(false);
+  const older=!state.demo&&hasWorkspaceData()&&new Date(incoming.updatedAt)<new Date(state.updatedAt);
+  const keepable=hasWorkspaceData()&&!state.demo||Boolean(corruptRaw);
+  const imageCount=(incoming.profile.photo?1:0)+incoming.assets.filter(a=>a.logo).length;
+  modalDraft={type:'restore',incoming,filename,isRecovery,original:JSON.stringify(state)};
+  showModal(`${modalHeader(isRecovery?'Review your previous workspace':'Ready to restore','Your file has been checked. Review what it contains before continuing.')}<div class="modal-body"><div class="form-error" id="form-error" role="alert"></div>
+    <div class="restore-file"><span class="backup-icon">${icon('check')}</span><div><strong>${esc(filename)}</strong><small>Valid Vault backup &middot; ${sizeLabel(bytes)}<br>Saved ${esc(formatStamp(incoming.updatedAt))}</small></div></div>
+    <div class="restore-profile"><span class="avatar">${incoming.profile.photo?`<img src="${incoming.profile.photo}" alt="Profile photo in this backup">`:esc(incoming.profile.name.slice(0,1))}</span><div><strong>${esc(incoming.profile.name)}</strong><p>${esc(incoming.profile.subtitle)}${incoming.demo?' &middot; Sample workspace':''}</p></div></div>
+    <div class="restore-counts"><div><strong>${incoming.assets.length}</strong><span>Accounts</span></div><div><strong>${incoming.entries.length}</strong><span>Transactions</span></div><div><strong>${incoming.loans.length}</strong><span>Loans</span></div><div><strong>${incoming.loanPayments.length}</strong><span>Repayments</span></div></div>
+    <div class="restore-details"><span>${icon('check')}${imageCount} saved ${imageCount===1?'image':'images'}</span><span>${icon('check')}${incoming.snapshots.length} valuation ${incoming.snapshots.length===1?'snapshot':'snapshots'}</span><span>${icon('check')}Profile &amp; currency settings</span></div>
+    ${older?'<div class="inline-note warning" style="margin-bottom:17px">'+icon('clock')+'<span>This file is older than the workspace currently open. Changes made after this backup will not be in the restored version.</span></div>':''}
+    <p class="restore-warning"><strong>This replaces the workspace in this browser. It does not merge records.</strong><br>${state.demo?'Your sample data will be replaced.':`Current workspace: ${state.assets.length} accounts, ${state.entries.length} transactions, ${state.loans.length} loans and ${state.loanPayments.length} repayments.`} Other devices are not changed.</p>
+    ${keepable?'<div class="restore-save-current"><label class="checkbox-line"><input type="checkbox" id="restore-keep-copy" checked><span>Keep a local pre-restore copy of my current workspace.</span></label><p>This provides one-step recovery on this browser only. Download your current backup for a separate, portable copy.</p></div>':''}
+    <label class="checkbox-line"><input type="checkbox" id="restore-confirm"><span>I understand that these records will replace the current workspace.</span></label></div>
+    <div class="modal-footer restore-footer"><button class="btn btn-secondary btn-small" data-action="export" ${persistenceBlocked?'disabled':''}>${icon('download')}Download current first</button><div><button class="btn btn-secondary" data-action="close-modal">Cancel</button><button class="btn btn-primary" id="restore-apply" data-action="apply-restore" disabled>${icon('check')}Restore workspace</button></div></div>`);
+}
+function applyRestore(){
+  const draft=modalDraft;
+  if(draft?.type!=='restore'||!$('#restore-confirm')?.checked)return;
+  if(pendingExternal)return formError('Another tab changed this workspace. Close this preview and open the backup again.');
+  if(draft.original!==JSON.stringify(state)){
+    // A download updates only backup timestamps. Any ledger changes invalidate the preview.
+    const before=JSON.parse(draft.original),now=JSON.parse(JSON.stringify(state));
+    before.updatedAt=now.updatedAt;before.settings.lastBackup=now.settings.lastBackup;
+    if(JSON.stringify(before)!==JSON.stringify(now))return formError('The current workspace changed. Close this preview and review the backup again.');
+  }
+  const keep=$('#restore-keep-copy')?.checked||false;
+  const next=validateState(draft.incoming);
+  try{
+    if(keep){const raw=corruptRaw||JSON.stringify(state);localStorage.setItem(RECOVERY_KEY,JSON.stringify({savedAt:new Date().toISOString(),raw}));}
+    // localStorage writes are atomic. Do not replace the active state unless saving succeeds.
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
+  }catch(err){return formError('Restore stopped: this browser could not save the workspace. Your current records are unchanged. Download the current backup, then free browser storage or use a regular browser window. If only the extra recovery copy is too large, uncheck it after downloading your current backup.');}
+  state=next;storageOk=true;persistenceBlocked=false;corruptRaw='';pendingExternal=null;resetFilters();
+  closeModal();setPage('overview');
+  toast('Workspace restored. Your saved accounts, loans, pictures and history are ready.');
+}
+async function shareBackup(){
+  try{
+    if(!navigator.share||!navigator.canShare){exportBackup();return;}
+    const prepared=transferableState(),file=new File([prepared.text],prepared.name,{type:'application/json'});
+    if(!navigator.canShare({files:[file]})){downloadBlob(prepared.name,prepared.text);render();toast('Backup prepared. Save it to your private Files or Downloads folder.');return;}
+    await navigator.share({files:[file],title:'Vault workspace backup'});
+    render();toast('Backup handed to your chosen app. Keep a private copy.');
+  }catch(err){if(err.name==='AbortError')return;toast('Sharing was unavailable. Use Download full backup instead.',true);}
+}
+function reviewRecovery(){
+  const r=getRecovery();if(!r)return toast('No previous workspace is saved in this browser.',true);
+  try{restorePreview(validateState(JSON.parse(r.raw)),'Previous workspace - '+formatStamp(r.savedAt),new Blob([r.raw]).size,true);}catch(err){infoModal('Recovery copy available','<p>This earlier copy cannot be restored automatically. Download it to keep the original records.</p><button class="btn btn-primary" data-action="export-previous">'+icon('download')+'Download recovery copy</button>');}
+}
+function mobileMore(){
+  modalDraft={type:'more'};
+  showModal(`${modalHeader('Your workspace','Everything else, close at hand.')}<div class="modal-body"><div class="more-profile">${avatar()}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><small>${esc(state.profile.subtitle)}</small></div></div><div class="more-menu">
+    <button data-action="profile">${icon('user')}<span>Edit profile<small>Your name, photo and badge</small></span>${icon('chevron')}</button>
+    <button data-page="backup">${icon('folder')}<span>Backup &amp; restore<small>Move your workspace between devices</small></span>${icon('chevron')}</button>
+    <button data-page="activity">${icon('clock')}<span>Activity log<small>All account transactions</small></span>${icon('chevron')}</button>
+    <button data-page="settings">${icon('settings')}<span>Settings<small>Currencies, privacy and workspace</small></span>${icon('chevron')}</button>
+    <button data-action="help">${icon('info')}<span>How it works</span>${icon('chevron')}</button></div></div>` ,true);
+}
+function updateMobileNav(){
+  $$('.mobile-tab[data-page]').forEach(b=>{const active=b.dataset.page===ui.page;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
+  const more=$('#mobile-more');if(more){const active=['activity','settings','backup'].includes(ui.page);more.classList.toggle('active',active);more.setAttribute('aria-current',active?'page':'false');}
+  const nav=$('.nav-item[data-action="open-backup"]');if(nav){nav.classList.toggle('active',ui.page==='backup');nav.setAttribute('aria-current',ui.page==='backup'?'page':'false');}
+}
+function handleUpgradeAction(action,el){
+  if(action==='pick-date'){openDatePicker(el.dataset.target);return true;}
+  if(action==='mobile-more'){mobileMore();return true;}
+  if(action==='apply-restore'){applyRestore();return true;}
+  if(action==='share-backup'){shareBackup();return true;}
+  if(action==='review-recovery'){reviewRecovery();return true;}
+  if(action==='export-previous'){const r=getRecovery();if(r)downloadBlob('vault-before-restore-'+today()+'.json',r.raw);return true;}
+  return false;
+}
+function dateDisplay(value,mode='date'){
+  if(!value)return mode==='month'?'Choose a month':'Choose a date';
+  const d=dateObj(mode==='month'?value+'-01':value);
+  return d.toLocaleDateString('en-GB',mode==='month'?{month:'long',year:'numeric'}:{day:'numeric',month:'short',year:'numeric'});
+}
+function enhanceDateInputs(root=document){
+  $$('input[type="date"],input[type="month"]',root).forEach(input=>{
+    if(input.dataset.dateEnhanced)return;
+    if(!input.id)input.id='date-'+uid();
+    const label=$$('label[for]',root).find(l=>l.htmlFor===input.id);
+    const text=(label?.childNodes[0]?.textContent||input.getAttribute('aria-label')||'Choose a date').trim();
+    input.dataset.dateEnhanced='true';input.dataset.dateLabel=text;input.classList.add('date-native');input.tabIndex=-1;input.setAttribute('aria-hidden','true');
+    const wrap=document.createElement('div');wrap.className='date-control';input.parentNode.insertBefore(wrap,input);wrap.appendChild(input);
+    const btn=document.createElement('button');btn.type='button';btn.id=input.id+'-trigger';btn.className='date-trigger';btn.dataset.action='pick-date';btn.dataset.target=input.id;btn.setAttribute('aria-haspopup','dialog');btn.setAttribute('aria-controls','date-picker');btn.setAttribute('aria-expanded','false');btn.disabled=input.disabled;
+    wrap.appendChild(btn);if(label)label.htmlFor=btn.id;refreshDateTrigger(input);
+    input.addEventListener('invalid',e=>{e.preventDefault();if(!$('#date-picker').open)openDatePicker(input.id);toast('Choose a valid '+text.toLowerCase()+'.',true);});
+    input.addEventListener('change',()=>refreshDateTrigger(input));
+  });
+}
+function refreshDateTrigger(input){
+  const b=document.getElementById(input.id+'-trigger');if(!b)return;
+  b.disabled=input.disabled;
+  b.innerHTML='<span'+(!input.value?' class="date-placeholder"':'')+'>'+esc(dateDisplay(input.value,input.type))+'</span>'+icon('calendar');
+  b.setAttribute('aria-label',(input.dataset.dateLabel||'Date')+': '+dateDisplay(input.value,input.type));
+}
+function enhanceUI(root=document){
+  enhanceDateInputs(root);
+  $$('input[type="number"]',root).forEach(input=>input.setAttribute('inputmode','decimal'));
+  $$('table',root).forEach(table=>{
+    if(!table.querySelector('thead'))return;
+    table.classList.add('mobile-ledger');
+    const head=table.querySelector('thead th:nth-child(2)');
+    if(head?.textContent.includes('Loan'))table.classList.add('payment-ledger');
+    const labels=$$('thead th',table).map(h=>h.textContent.trim());
+    $$('tbody tr',table).forEach(row=>$$('td',row).forEach((td,i)=>{if(!td.hasAttribute('data-label'))td.dataset.label=labels[i]||'';}));
+  });
+}
+function pickerValueAllowed(value){
+  const p=pickerSession;if(!p)return false;
+  if(p.mode==='month'?!/^\d{4}-(0[1-9]|1[0-2])$/.test(value):!validDate(value))return false;
+  return (!p.min||value>=p.min)&&(!p.max||value<=p.max);
+}
+function pickerMonthAllowed(y,m){
+  const p=pickerSession,key=`${String(y).padStart(4,'0')}-${String(m+1).padStart(2,'0')}`;
+  return y>=1&&y<=9999&&(!p.min||key>=p.min.slice(0,7))&&(!p.max||key<=p.max.slice(0,7));
+}
+function openDatePicker(id){
+  const input=document.getElementById(id);if(!input||input.disabled)return;
+  closeDatePicker(false);
+  const mode=input.type==='month'?'month':'date',current=input.value;
+  let initial=current||(mode==='month'?today().slice(0,7):today());
+  if(input.min&&initial<input.min)initial=input.min;if(input.max&&initial>input.max)initial=input.max;
+  const d=dateObj(mode==='month'?initial+'-01':initial);
+  pickerSession={id,input,mode,value:current,min:input.min,max:input.max,required:input.required,year:d.getFullYear(),month:d.getMonth(),focus:initial};
+  const dialog=$('#date-picker');dialog.innerHTML='';renderDatePicker();
+  document.getElementById(id+'-trigger')?.setAttribute('aria-expanded','true');
+  document.body.classList.add('modal-open');dialog.showModal();positionDatePicker();
+  requestAnimationFrame(()=>{const target=$('[tabindex="0"]',dialog)||$('.dp-apply',dialog);target?.focus({preventScroll:true});});
+}
+function renderDatePicker(){
+  const p=pickerSession;if(!p)return;
+  const firstYear=p.min?Number(p.min.slice(0,4)):Math.min(1900,p.year),lastYear=p.max?Number(p.max.slice(0,4)):Math.max(2100,p.year);
+  const years=Array.from({length:Math.max(1,lastYear-firstYear+1)},(_,i)=>firstYear+i);
+  const prev=new Date(p.year,p.month-1,1),next=new Date(p.year,p.month+1,1);
+  let selection=p.value?dateDisplay(p.value,p.mode):'No date selected';
+  const yearOptions=years.map(y=>`<option value="${y}" ${y===p.year?'selected':''}>${y}</option>`).join('');
+  const monthOptions=MONTH_NAMES.map((name,m)=>`<option value="${m}" ${m===p.month?'selected':''} ${pickerMonthAllowed(p.year,m)?'':'disabled'}>${name}</option>`).join('');
+  let calendar='',presets=[];
+  if(p.mode==='date'){
+    const first=new Date(p.year,p.month,1,12),offset=(first.getDay()+6)%7,start=new Date(p.year,p.month,1-offset,12),daysInMonth=new Date(p.year,p.month+1,0).getDate(),cells=Math.ceil((offset+daysInMonth)/7)*7;
+    const focus=p.focus&&pickerValueAllowed(p.focus)?p.focus:p.value||localDate(first);
+    calendar='<div class="dp-weekdays" aria-hidden="true">'+['M','T','W','T','F','S','S'].map(x=>'<span>'+x+'</span>').join('')+'</div><div class="dp-grid" role="group" aria-label="'+MONTH_NAMES[p.month]+' '+p.year+'">';
+    for(let i=0;i<cells;i++){
+      const d=new Date(start);d.setDate(start.getDate()+i);const key=localDate(d),selected=key===p.value,allowed=pickerValueAllowed(key);
+      calendar+=`<button type="button" class="dp-day ${d.getMonth()!==p.month?'other-month':''} ${key===today()?'is-today':''} ${selected?'selected':''}" data-dp-date="${key}" ${allowed?'':'disabled'} tabindex="${key===focus&&allowed?0:-1}" aria-label="${esc(d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}" aria-pressed="${selected}" ${key===today()?'aria-current="date"':''}>${d.getDate()}</button>`;
+    }
+    calendar+='</div>';
+    presets=(p.max&&p.max<=today()?[[today(),'Today'],[shiftDate(-1),'Yesterday'],[shiftDate(-7),'7 days ago']]:[[today(),'Today'],[shiftDate(1),'Tomorrow'],[shiftDate(7),'+7 days'],[shiftDate(30),'+30 days']]).filter(([v])=>pickerValueAllowed(v));
+  }else{
+    calendar='<div class="dp-month-grid" role="group" aria-label="Choose a month">'+MONTH_NAMES.map((name,m)=>{const key=`${String(p.year).padStart(4,'0')}-${String(m+1).padStart(2,'0')}`;return `<button type="button" class="dp-month-choice ${key===p.value?'selected':''}" data-dp-month="${key}" tabindex="${key===(p.focus||p.value)?0:-1}" ${pickerValueAllowed(key)?'':'disabled'} aria-pressed="${key===p.value}">${name.slice(0,3)}</button>`;}).join('')+'</div>';
+    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);
+    presets=[[today().slice(0,7),'This month'],[localDate(d).slice(0,7),'Last month']].filter(([v])=>pickerValueAllowed(v));
+  }
+  const prevAllowed=p.mode==='month'?p.year>firstYear:pickerMonthAllowed(prev.getFullYear(),prev.getMonth()),nextAllowed=p.mode==='month'?p.year<lastYear:pickerMonthAllowed(next.getFullYear(),next.getMonth());
+  $('#date-picker').innerHTML=`<div class="dp-head"><div><div class="dp-eyebrow">${p.mode==='month'?'SELECT MONTH':'SELECT DATE'}</div><h2 id="dp-title">${esc(p.input.dataset.dateLabel||'Choose a date')}</h2></div><button type="button" class="icon-button" data-dp="cancel" aria-label="Close date picker">${icon('close')}</button></div><div class="dp-body"><div class="dp-month-bar"><button type="button" class="icon-button" data-dp="previous" aria-label="Previous ${p.mode==='month'?'year':'month'}" ${prevAllowed?'':'disabled'}>${icon('chevron')}</button><div class="dp-month-selects">${p.mode==='date'?`<select id="dp-month" aria-label="Month">${monthOptions}</select>`:''}<select id="dp-year" aria-label="Year">${yearOptions}</select></div><button type="button" class="icon-button" data-dp="next" aria-label="Next ${p.mode==='month'?'year':'month'}" ${nextAllowed?'':'disabled'}>${icon('chevron')}</button></div>${calendar}<div class="dp-presets">${presets.map(([v,label])=>`<button type="button" data-dp-preset="${v}">${label}</button>`).join('')}</div><div class="dp-selection" aria-live="polite">${icon('calendar')}<span>${esc(selection)}</span></div></div><div class="dp-footer"><button type="button" class="dp-clear" data-dp="clear" ${p.required?'disabled title="This date is required"':''}>Clear</button><button type="button" class="btn btn-secondary" data-dp="cancel">Cancel</button><button type="button" class="btn btn-primary dp-apply" data-dp="apply" ${(!p.value&&p.required||p.value&&!pickerValueAllowed(p.value))?'disabled':''}>${icon('check')}Use ${p.mode==='month'?'month':'date'}</button></div>`;
+  const grid=$('.dp-grid')||$('.dp-month-grid');if(grid&&!grid.querySelector('[tabindex="0"]'))grid.querySelector('button:not(:disabled)')?.setAttribute('tabindex','0');
+  if($('#date-picker').open)positionDatePicker();
+}
+function positionDatePicker(){
+  const p=pickerSession,d=$('#date-picker');if(!p||!d.open)return;
+  if(matchMedia('(max-width:540px)').matches){d.style.left='';d.style.top='';return;}
+  const b=document.getElementById(p.id+'-trigger'),r=b?.getBoundingClientRect();if(!r)return;
+  const height=d.getBoundingClientRect().height,width=d.getBoundingClientRect().width,vh=window.visualViewport?.height||window.innerHeight;
+  const left=Math.max(12,Math.min(r.left,innerWidth-width-12));let top=r.bottom+8;
+  if(top+height>vh-12)top=r.top-height-8;
+  top=Math.max(12,Math.min(top,vh-height-12));d.style.left=left+'px';d.style.top=top+'px';
+}
+function closeDatePicker(focus=true){
+  const p=pickerSession,dialog=$('#date-picker');if(dialog?.open)dialog.close();pickerSession=null;
+  if(p){const b=document.getElementById(p.id+'-trigger');b?.setAttribute('aria-expanded','false');if(focus&&b?.isConnected)b.focus({preventScroll:true});}
+  if(!$('#modal')?.open)document.body.classList.remove('modal-open');
+}
+function selectPickerValue(value){
+  const p=pickerSession;if(!p||value&&!pickerValueAllowed(value))return;
+  p.value=value;p.focus=value;
+  if(value){const d=dateObj(p.mode==='month'?value+'-01':value);p.year=d.getFullYear();p.month=d.getMonth();}
+  renderDatePicker();
+  const selected=$('.dp-day.selected,.dp-month-choice.selected',$('#date-picker'));selected?.focus({preventScroll:true});
+}
+function applyPickerValue(){
+  const p=pickerSession;if(!p||(!p.value&&p.required)||p.value&&!pickerValueAllowed(p.value))return;
+  const input=p.input;if(!input.isConnected){closeDatePicker(false);return;}
+  input.value=p.value;refreshDateTrigger(input);closeDatePicker();
+  input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));
+}
+function initInterfaceUpgrade(){
+  const picker=document.createElement('dialog');picker.id='date-picker';picker.className='date-picker';picker.setAttribute('aria-labelledby','dp-title');picker.setAttribute('aria-modal','true');document.body.appendChild(picker);
+  picker.addEventListener('cancel',e=>{e.preventDefault();closeDatePicker();});
+  picker.addEventListener('click',e=>{
+    e.stopPropagation();
+    if(e.target===picker){const r=picker.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)closeDatePicker();return;}
+    const b=e.target.closest('button');if(!b||b.disabled)return;
+    if(b.dataset.dpDate){selectPickerValue(b.dataset.dpDate);return;}
+    if(b.dataset.dpMonth){selectPickerValue(b.dataset.dpMonth);return;}
+    if(b.dataset.dpPreset){selectPickerValue(b.dataset.dpPreset);return;}
+    const action=b.dataset.dp,p=pickerSession;if(!p)return;
+    if(action==='cancel'){closeDatePicker();return;}
+    if(action==='apply'){applyPickerValue();return;}
+    if(action==='clear'){if(!p.required)selectPickerValue('');return;}
+    if(action==='previous'||action==='next'){
+      const delta=action==='previous'?-1:1;
+      if(p.mode==='month')p.year+=delta;else {const d=new Date(p.year,p.month+delta,1);p.year=d.getFullYear();p.month=d.getMonth();}
+      p.focus='';renderDatePicker();$('[data-dp="'+action+'"]',picker)?.focus({preventScroll:true});
+    }
+  });
+  picker.addEventListener('change',e=>{
+    e.stopPropagation();if(!pickerSession)return;
+    const id=e.target.id,p=pickerSession;
+    if(id==='dp-month')p.month=Number(e.target.value);if(id==='dp-year')p.year=Number(e.target.value);
+    if(!pickerMonthAllowed(p.year,p.month)){
+      const valid=Array.from({length:12},(_,m)=>m).filter(m=>pickerMonthAllowed(p.year,m));if(valid.length)p.month=valid[0];
+    }
+    p.focus='';renderDatePicker();$('#'+id,picker)?.focus({preventScroll:true});
+  });
+  picker.addEventListener('keydown',e=>{
+    const target=e.target.closest('[data-dp-date]');if(!target||!pickerSession)return;
+    const d=dateObj(target.dataset.dpDate),key=e.key;
+    if(key==='ArrowLeft')d.setDate(d.getDate()-1);else if(key==='ArrowRight')d.setDate(d.getDate()+1);else if(key==='ArrowUp')d.setDate(d.getDate()-7);else if(key==='ArrowDown')d.setDate(d.getDate()+7);else if(key==='Home')d.setDate(d.getDate()-(d.getDay()+6)%7);else if(key==='End')d.setDate(d.getDate()+6-(d.getDay()+6)%7);else if(key==='PageUp'||key==='PageDown'){
+      const wanted=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+(key==='PageUp'?-1:1)*(e.shiftKey?12:1));d.setDate(Math.min(wanted,new Date(d.getFullYear(),d.getMonth()+1,0).getDate()));
+    }else return;
+    e.preventDefault();let value=localDate(d);const p=pickerSession;if(p.min&&value<p.min)value=p.min;if(p.max&&value>p.max)value=p.max;if(!pickerValueAllowed(value))return;
+    const next=dateObj(value);p.year=next.getFullYear();p.month=next.getMonth();p.focus=value;renderDatePicker();$('[data-dp-date="'+value+'"]',picker)?.focus({preventScroll:true});
+  });
+  const observer=new MutationObserver(records=>{
+    const roots=new Set();for(const r of records){if(r.addedNodes.length){const host=r.target.closest?.('#main,#modal-content');if(host)roots.add(host);}}
+    roots.forEach(enhanceUI);
+  });
+  observer.observe($('#main'),{childList:true,subtree:true});observer.observe($('#modal-content'),{childList:true,subtree:true});
+  document.addEventListener('change',e=>{if(e.target.id==='restore-confirm'){const button=$('#restore-apply');if(button)button.disabled=!e.target.checked;}});
+  document.addEventListener('dragover',e=>{const drop=e.target.closest?.('[data-backup-drop]');if(drop){e.preventDefault();e.dataTransfer.dropEffect='copy';drop.classList.add('drag-over');}});
+  document.addEventListener('dragleave',e=>{const drop=e.target.closest?.('[data-backup-drop]');if(drop&&!drop.contains(e.relatedTarget))drop.classList.remove('drag-over');});
+  document.addEventListener('drop',e=>{const drop=e.target.closest?.('[data-backup-drop]');if(!drop)return;e.preventDefault();drop.classList.remove('drag-over');if(e.dataTransfer.files.length!==1){toast('Choose one JSON backup at a time.',true);return;}importBackup(e.dataTransfer.files[0]);});
+  $('#modal').addEventListener('close',()=>{if(!$('#modal').open){closeDatePicker(false);document.body.classList.remove('modal-open');}});
+  window.addEventListener('resize',positionDatePicker);window.visualViewport?.addEventListener('resize',positionDatePicker);
+}
+
 document.addEventListener('input',event=>{
   const id=event.target.id;
   if(id==='loan-outstanding'&&modalDraft?.type==='loan')modalDraft.outstandingTouched=true;
@@ -525,9 +837,10 @@ document.addEventListener('submit',event=>{event.preventDefault();if(pendingExte
 });
 $('#modal').addEventListener('click',event=>{if(event.target===$('#modal')){const r=$('#modal').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)closeModal();}});
 $('#modal').addEventListener('close',()=>{modalDraft=null;if(pendingExternal){state=pendingExternal;pendingExternal=null;resetFilters();render();toast('Latest workspace loaded from the other tab.');}});
-window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(['overview','cash','loans','tracker','activity','settings'].includes(p)&&ui.page!==p){ui.page=p;render();}});
+window.addEventListener('hashchange',()=>{const p=location.hash.slice(1);if(['overview','cash','loans','tracker','activity','settings','backup'].includes(p)&&ui.page!==p){ui.page=p;render();}});
 window.addEventListener('beforeunload',event=>{if(!storageOk){event.preventDefault();event.returnValue='Unsaved changes. Export a backup before leaving.';}});
 window.addEventListener('storage',event=>{if(event.key!==STORAGE_KEY||!event.newValue)return;try{const updated=validateState(JSON.parse(event.newValue));if($('#modal').open){pendingExternal=updated;formError('This workspace changed in another tab. Close this form to load the latest version.');toast('Another tab updated this workspace. Close this form before continuing.',true);return;}state=updated;render();toast('Workspace updated from another tab.');}catch(err){toast('Another tab changed the saved data, but it could not be read.',true);}});
+initInterfaceUpgrade();
 render();
 if(!storageOk)setTimeout(()=>toast(persistenceBlocked?'Saved data needs recovery. It has not been overwritten. Open Settings.':'Browser saving is unavailable. Use Export JSON to keep your work.',true),600);
 })();
