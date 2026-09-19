@@ -1,18 +1,31 @@
 # Vault - Personal Asset Manager
 
-A working, responsive, local-first dashboard for cash, trading accounts, crypto holdings and other personal assets. The interface uses black and blue, with an optional gold profile badge.
+A working, responsive, local-first dashboard for cash, trading accounts, crypto holdings and other personal assets. The interface uses your supplied white SVG logo with Obsidian Root (#0C0E09), Electric Sun (#FCFF1A), and Nox Noir (#141414). The optional personal badge uses Electric Sun. It is decorative, not independent verification.
 
 ## Open the dashboard
 
 The easiest version is **vault-assets.html**. Open it in a desktop browser; it contains all the code it needs and makes no network requests.
 
-The source version consists of `index.html`, `styles.css` and `app.js`. Keep these three files in the same folder. There is no package installation, build system, third-party JavaScript library or API key.
+The source version consists of `index.html`, `styles.css` and `app.js`. Keep these three files in the same folder. The original supplied `logo.svg` is also included; the UI embeds the same vector paths for offline use. There is no package installation, build system, third-party JavaScript library or API key.
 
 The first launch contains clearly labeled sample data. Use **Start fresh** before entering your real balances. This keeps your profile and currency settings but removes the sample assets, entries and chart history.
 
+## Moving from the earlier version
+
+Before switching files or browsers, open the earlier dashboard and export a JSON backup. Then open this branded version, choose **Backup & restore**, and import the backup. The storage key and backup format have not changed, but browsers may keep separate storage for different local HTML file paths. Do not assume that moving or renaming a file carries your data with it.
+
+## Brand details
+
+- **Obsidian Root #0C0E09:** application background, sidebar and input surfaces.
+- **Nox Noir #141414:** cards, panels and dialogs.
+- **Electric Sun #FCFF1A:** primary buttons, navigation, positive values, focus rings, chart highlights and profile badge.
+- The supplied white SVG geometry is unchanged and appears in desktop navigation, the mobile header and the browser icon.
+- Supporting labels use neutral whites and greys. Losses have explicit minus signs and labels, left-facing performance bars and a striped treatment, rather than introducing another brand colour.
+- Existing profile, asset, daily ledger, currency conversion and backup calculations are unchanged.
+
 ## Included features
 
-- Profile name and subtitle editing, photo upload/replacement/removal, and an optional gold display badge.
+- Profile name and subtitle editing, photo upload/replacement/removal, and an optional profile display badge.
 - Headline net worth in USDT, calculated from every included asset. Other display currencies are configurable.
 - Cash, forex, crypto, stocks/ETFs, property, other investments, and prop/demo accounts.
 - Asset cards with brand logo uploads, original capital, current balance/value, gain/loss and percentage return.
@@ -74,3 +87,5 @@ Importing a backup replaces the entire current workspace after confirmation. Del
 - `app.js`: calculation model, storage, validation, forms, charts and exports.
 
 The source can be served as a static website. Publishing these files does not add authentication, a database or synchronization; browser data remains local. Never place your backup JSON files in a public website folder.
+
+- `logo.svg`: your original uploaded white brand mark.
