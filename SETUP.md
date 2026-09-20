@@ -1,4 +1,4 @@
-# Vault v4 - Turn on private sync and daily backups
+# Assets v5 - Turn on private sync and daily backups
 
 ## What works immediately, and what needs setup
 
@@ -234,3 +234,8 @@ images or unnecessary data before syncing. Do not delete records blindly.
 - Vercel Cron limits: https://vercel.com/docs/cron-jobs/usage-and-pricing
 - Manifest shortcuts: https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/shortcuts
 - iPhone home-screen web apps: https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios
+
+
+## Optional daily status email
+
+The dashboard can store an opt-in email preference in the private workspace. To actually send mail, run `database/05-email-digest.sql` after configuring a Resend account and a verified sender domain. Store the API key with Supabase Vault using the example commands at the top of that SQL file; never put the key in GitHub, Vercel frontend variables or browser code. The database scheduler sends at most one status message for each completed local day, after the daily backup exists.

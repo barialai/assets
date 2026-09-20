@@ -196,8 +196,8 @@ begin
  end loop;
  delete from public.vault_backups where created_at<p_now-interval '90 days';
  -- Preserve all recent revisions AND one older baseline for accurate midnight cutoffs.
- delete from vault_private.revisions r where r.created_at<p_now-interval '8 days' and r.revision<(
-  select max(z.revision) from vault_private.revisions z where z.user_id=r.user_id and z.created_at<p_now-interval '8 days'
+ delete from vault_private.revisions as rev where rev.created_at<p_now-interval '8 days' and rev.revision<(
+  select max(z.revision) from vault_private.revisions as z where z.user_id=rev.user_id and z.created_at<p_now-interval '8 days'
  );
  insert into vault_private.job_health(id,last_success,backup_count)values(true,p_now,v_count)
  on conflict(id)do update set last_success=excluded.last_success,backup_count=excluded.backup_count;

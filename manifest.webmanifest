@@ -1,21 +1,66 @@
 {
   "id": "./",
-  "name": "Vault - Personal Workspace",
-  "short_name": "Vault Quick",
-  "description": "Quick updates to your private money, investment and loan workspace.",
+  "name": "Assets - Personal Workspace",
+  "short_name": "Assets",
+  "description": "Quick updates to your private cash, investments, loans and trading workspace.",
   "start_url": "./?quick=1#quick",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0C0E09",
-  "theme_color": "#0C0E09",
+  "background_color": "#13171B",
+  "theme_color": "#13171B",
   "icons": [
-    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-    {"src":"icons/icon-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    {"name":"Quick Update","short_name":"Quick","url":"./?quick=1#quick","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]},
-    {"name":"Full Dashboard","short_name":"Dashboard","url":"./#overview","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]},
-    {"name":"Loans & Repayments","short_name":"Loans","url":"./#loans","icons":[{"src":"icons/icon-192.png","sizes":"192x192"}]}
+    {
+      "name": "Assets Quick Update",
+      "short_name": "Quick",
+      "url": "./?quick=1#quick",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Full Dashboard",
+      "short_name": "Dashboard",
+      "url": "./#overview",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Loans & Repayments",
+      "short_name": "Loans",
+      "url": "./#loans",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

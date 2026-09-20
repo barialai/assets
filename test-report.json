@@ -1,61 +1,12 @@
 {
-  "release": "Vault interface v4; ledger schema v2",
-  "tested_at_utc": "2026-09-19T20:59:27.848606+00:00",
-  "node_tests": {
-    "passed": 21,
-    "failed": 0,
-    "scope": "Node built-in tests; authentication/CSRF/cookie/ledger logic and mocked Supabase API calls"
-  },
-  "browser_tests": {
-    "engine": "Headless Chromium, locally rendered app; in-memory test storage and mocked network",
-    "viewports": [
-      320,
-      360,
-      390,
-      430,
-      540,
-      768,
-      1024,
-      1440
-    ],
-    "routes": [
-      "quick",
-      "overview",
-      "cash",
-      "loans",
-      "tracker",
-      "activity",
-      "settings",
-      "backup",
-      "cloud"
-    ],
-    "route_viewport_combinations": 72,
-    "document_horizontal_overflow": 0,
-    "uncaught_page_errors": 0,
-    "flows": [
-      "Quick spending uses the full account entry form",
-      "Sign-in and explicit initial upload",
-      "Clean remote revision is loaded",
-      "Simultaneous changes preserve both copies for review",
-      "Quick balance uses valuation delta; investment profit unchanged",
-      "Custom loan date picker opens on mobile; cancel preserves date",
-      "User-supplied v2 backup round-trips all records, images and saved rates privately",
-      "Offline network failure keeps local edit; successful retry clears pending state",
-      "Mocked cloud manual backup and restore replace state without replaying ledger entries",
-      "Mobile Full dashboard action retains overview and charts"
-    ]
-  },
-  "asset_integrity": {
-    "tick_png_sha256": "d7c75a6150df7dbe0e26c84c7e82e27ba943d9330cae4110122f0b90eb30bb2f",
-    "exact_original_tick_bytes": true
-  },
-  "build": "npm run build passed; public allow-list excludes SQL, tests, environment files, old standalone builds, and private JSON",
-  "not_tested": [
-    "No live Supabase project: database migration, row-level security behavior and pg_cron execution must be verified after installation",
-    "No live GitHub push or Vercel deployment",
-    "No real-device Safari/Android installation or production cookie lifecycle test",
-    "Not an independent security audit or disaster-recovery certification"
-  ],
-  "private_user_data_in_package": false,
-  "status": "Ready for configuration and deployment testing; cloud backup is NOT activated by this package"
+  "release": "Assets interface v5; ledger schema v2",
+  "tests": 21,
+  "passed": 21,
+  "failed": 0,
+  "notes": [
+    "New palette and Assets branding",
+    "Profile camera capture and customization",
+    "Cloud connection diagnostics",
+    "Optional daily email digest setup"
+  ]
 }
