@@ -80,3 +80,7 @@ independent private JSON downloads and monitor scheduler/database health.
 - Clickable profile with upload, phone camera capture and display controls.
 - Refined total-value and net-worth summary hierarchy.
 - Cloud connection diagnostics and optional daily email digest (`database/05-email-digest.sql`).
+
+
+## V7 mobile safe-area update
+The mobile header and bottom navigation now respect iOS/Android safe areas. The bottom navigation is a floating dock with additional content clearance, while desktop layout is unchanged.

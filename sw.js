@@ -1,6 +1,6 @@
 /* Cache the PUBLIC interface only. Never cache /api/, financial responses,
    authentication, JSON downloads, or user images. Offline edits use the ledger. */
-const CACHE='assets-public-shell-v6-20260921';
+const CACHE='assets-public-shell-v7-20260921';
 const FILES=['./','./index.html','./app.js','./styles.css','./logo.svg','./tickmark.png','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-maskable.png','./icons/apple-touch-icon.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>(k.startsWith('vault-public-shell-')||k.startsWith('assets-public-shell-'))&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

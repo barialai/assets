@@ -513,3 +513,91 @@ body{background:#0F0F0F;color:#FFFFFF}
   .line-chart-wrap{aspect-ratio:550/190;min-height:170px;max-height:none}
   .hero-chart{padding:20px 21px 22px}
 }
+
+/* V7 — iPhone/Android safe-area polish and professional mobile dock. */
+:root{
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+}
+@media(max-width:760px){
+  html,body{min-height:100%;min-height:100dvh}
+  body{min-height:100dvh}
+  .app-shell{
+    min-height:100dvh;
+    padding-bottom:calc(112px + var(--safe-bottom));
+  }
+  /* Keep all header content below Dynamic Island / notch / status bar. */
+  .topbar{
+    box-sizing:border-box;
+    top:0;
+    height:calc(64px + var(--safe-top));
+    min-height:calc(64px + var(--safe-top));
+    padding:var(--safe-top) calc(18px + var(--safe-right)) 0 calc(18px + var(--safe-left));
+    align-items:center;
+    background:#0F0F0FF2;
+    border-bottom:1px solid #FFFFFF14;
+  }
+  .topbar-left,.topbar-right{min-height:64px}
+  main{
+    padding-top:28px;
+    padding-left:calc(20px + var(--safe-left));
+    padding-right:calc(20px + var(--safe-right));
+  }
+  /* Give the last content/footer a clear visual stop before the fixed dock. */
+  .app-footer{
+    margin-top:28px;
+    margin-bottom:12px;
+    padding:22px calc(20px + var(--safe-right)) 28px calc(20px + var(--safe-left));
+    border-top:1px solid #FFFFFF10;
+  }
+  /* Floating mobile dock: separated from page content and the system home area. */
+  .mobile-bottom-nav{
+    inset:auto calc(10px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(10px + var(--safe-left));
+    min-height:72px;
+    padding:7px 8px;
+    border:1px solid #FFFFFF18;
+    border-radius:18px;
+    background:#181818F2;
+    box-shadow:0 14px 44px #000A,0 -1px 0 #FFFFFF08 inset;
+    backdrop-filter:blur(22px) saturate(130%);
+    -webkit-backdrop-filter:blur(22px) saturate(130%);
+    overflow:hidden;
+  }
+  .mobile-tab{
+    min-height:56px;
+    border-radius:13px;
+    color:#FFFFFF9A;
+  }
+  .mobile-tab.active{
+    color:#5DD62C;
+    background:#5DD62C12;
+    border-color:#5DD62C22;
+  }
+  .mobile-tab-quick .icon{
+    box-shadow:0 5px 18px #5DD62C24;
+  }
+  .toast-region{
+    bottom:calc(96px + var(--safe-bottom));
+    left:calc(16px + var(--safe-left));
+    right:calc(16px + var(--safe-right));
+  }
+  /* Dialogs and date picker also stay clear of system UI in standalone mode. */
+  .modal{
+    max-height:calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
+    margin-top:var(--safe-top);
+  }
+  .date-picker{
+    max-height:calc(100dvh - var(--safe-top));
+    padding-bottom:var(--safe-bottom);
+  }
+}
+@media(max-width:390px){
+  .mobile-bottom-nav{
+    inset-inline:calc(7px + var(--safe-left)) calc(7px + var(--safe-right));
+    gap:1px;
+  }
+  .mobile-tab{font-size:9px}
+  main{padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right))}
+}
