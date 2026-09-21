@@ -601,3 +601,58 @@ body{background:#0F0F0F;color:#FFFFFF}
   .mobile-tab{font-size:9px}
   main{padding-left:calc(16px + var(--safe-left));padding-right:calc(16px + var(--safe-right))}
 }
+
+
+/* V8 — focused phone mode: Overview, Quick Update, Profile only. */
+@media(max-width:760px){
+  /* Phone header stays quiet; navigation lives in the three-item dock. */
+  .topbar-right,.breadcrumb{display:none!important}
+  .topbar{justify-content:flex-start}
+  .topbar-left{width:100%;justify-content:flex-start}
+  .assets-mobile-wordmark{font-size:23px;font-weight:720;letter-spacing:-.7px;text-decoration:none;color:#fff}
+
+  .mobile-bottom-nav{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    max-width:430px;
+    margin-inline:auto;
+    left:max(calc(10px + var(--safe-left)),calc((100vw - 430px)/2));
+    right:max(calc(10px + var(--safe-right)),calc((100vw - 430px)/2));
+  }
+  .mobile-tab{font-size:10px;gap:5px}
+  .mobile-tab-profile .icon{width:22px;height:22px}
+
+  /* Trim copy on phone — keep values and actions, lose tutorial text. */
+  .app-footer,
+  .profile-edit-hint,
+  .page-heading>p,
+  .section-heading p,
+  .panel-heading p,
+  .quick-hero>p,
+  .quick-action small,
+  .quick-install,
+  .quick-bottom-link,
+  .hero-sub,
+  .cash-note,
+  .loan-caption{display:none!important}
+
+  /* Don't expose secondary phone navigation from the quick screen. */
+  .quick-header>.btn,
+  .quick-cloud,
+  .quick-account-section .section-heading>.text-link,
+  .quick-loans .section-heading>.text-link,
+  .quick-recent .panel-heading>.text-link{display:none!important}
+
+  .quick-header{margin-bottom:18px}
+  .quick-hero{padding-bottom:16px}
+  .quick-actions{margin-top:14px}
+  .quick-action{min-height:76px}
+  .quick-action strong{font-size:12px}
+
+  /* Compact form guidance without removing validation or warnings. */
+  .modal form .field-help{display:none!important}
+  .modal-header p{display:none!important}
+  .form-hint-details{display:none!important}
+
+  /* Since the footer is gone, maintain a clean stop above the floating dock. */
+  main{padding-bottom:26px}
+}
