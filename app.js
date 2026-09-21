@@ -608,23 +608,20 @@ function reviewRecovery(){
   const r=getRecovery();if(!r)return toast('No previous workspace is saved in this browser.',true);
   try{restorePreview(validateState(JSON.parse(r.raw)),'Previous workspace - '+formatStamp(r.savedAt),new Blob([r.raw]).size,true);}catch(err){infoModal('Recovery copy available','<p>This earlier copy cannot be restored automatically. Download it to keep the original records.</p><button class="btn btn-primary" data-action="export-previous">'+icon('download')+'Download recovery copy</button>');}
 }
-function mobileMore(){
-  modalDraft={type:'more'};
-  showModal(`${modalHeader('Your workspace','Everything else, close at hand.')}<div class="modal-body"><div class="more-profile">${avatar()}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><small>${esc(state.profile.subtitle)}</small></div></div><div class="more-menu">
-    <button data-action="profile">${icon('user')}<span>Edit profile<small>Your name, photo and badge</small></span>${icon('chevron')}</button>
-    <button data-page="backup">${icon('folder')}<span>Backup &amp; restore<small>Move your workspace between devices</small></span>${icon('chevron')}</button>
-    <button data-page="quick">${icon('bolt')}<span>Quick Update<small>Fast entries, the same full workspace</small></span>${icon('chevron')}</button><button data-page="tracker">${icon('chart')}<span>Daily tracker<small>All your trading results</small></span>${icon('chevron')}</button><button data-page="cloud">${icon('globe')}<span>Cloud &amp; daily backups<small>Private sync and daily snapshots</small></span>${icon('chevron')}</button><button data-action="install-help">${icon('phone')}<span>Phone shortcut<small>Add Quick Update to your home screen</small></span>${icon('chevron')}</button><button data-page="activity">${icon('clock')}<span>Activity log<small>All account transactions</small></span>${icon('chevron')}</button>
-    <button data-page="settings">${icon('settings')}<span>Settings<small>Currencies, privacy and workspace</small></span>${icon('chevron')}</button>
-    <button data-action="help">${icon('info')}<span>How it works</span>${icon('chevron')}</button></div></div>` ,true);
+function mobileProfile(){
+  modalDraft={type:'mobile-profile'};
+  showModal(`${modalHeader('Profile','')}<div class="modal-body mobile-profile-hub"><div class="more-profile">${avatar()}<div><strong>${esc(state.profile.name)}${state.profile.badge?badge():''}</strong><small>${esc(state.profile.subtitle)}</small></div><button class="btn btn-secondary btn-small" data-action="profile">${icon('edit')}Edit</button></div><div class="mobile-profile-section"><span class="mobile-profile-label">MANAGE</span><div class="more-menu mobile-profile-menu"><button data-page="cash">${icon('wallet')}<span>Everyday money</span>${icon('chevron')}</button><button data-page="loans">${icon('transfer')}<span>Loans</span>${icon('chevron')}</button><button data-page="tracker">${icon('chart')}<span>Daily tracker</span>${icon('chevron')}</button><button data-page="activity">${icon('clock')}<span>Activity log</span>${icon('chevron')}</button></div></div><div class="mobile-profile-section"><span class="mobile-profile-label">SETTINGS &amp; SYNC</span><div class="more-menu mobile-profile-menu"><button data-page="cloud">${icon('globe')}<span>Cloud &amp; daily backups</span>${icon('chevron')}</button><button data-page="backup">${icon('folder')}<span>Backup &amp; restore</span>${icon('chevron')}</button><button data-page="settings">${icon('settings')}<span>Settings</span>${icon('chevron')}</button></div></div></div>`,true);
 }
+function mobileMore(){mobileProfile();}
 function updateMobileNav(){
   $$('.mobile-tab[data-page]').forEach(b=>{const active=b.dataset.page===ui.page;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
-  const more=$('#mobile-more');if(more){const active=['activity','settings','backup','cloud','tracker'].includes(ui.page);more.classList.toggle('active',active);more.setAttribute('aria-current',active?'page':'false');}
+  const profile=$('.mobile-tab-profile');if(profile){const active=['cash','loans','tracker','activity','settings','backup','cloud'].includes(ui.page);profile.classList.toggle('active',active);profile.setAttribute('aria-current',active?'page':'false');}
   const nav=$('.nav-item[data-action="open-backup"]');if(nav){nav.classList.toggle('active',ui.page==='backup');nav.setAttribute('aria-current',ui.page==='backup'?'page':'false');}
 }
 function handleUpgradeAction(action,el){
   if(action==='pick-date'){openDatePicker(el.dataset.target);return true;}
-  if(action==='mobile-more'){mobileMore();return true;}
+  if(action==='mobile-more'){mobileProfile();return true;}
+  if(action==='mobile-profile'){mobileProfile();return true;}
   if(action==='apply-restore'){applyRestore();return true;}
   if(action==='share-backup'){shareBackup();return true;}
   if(action==='review-recovery'){reviewRecovery();return true;}

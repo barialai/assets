@@ -656,3 +656,19 @@ body{background:#0F0F0F;color:#FFFFFF}
   /* Since the footer is gone, maintain a clean stop above the floating dock. */
   main{padding-bottom:26px}
 }
+
+
+/* V9 — Profile is the phone hub for secondary workspace tools. */
+@media(max-width:760px){
+  .mobile-profile-hub{padding-top:18px}
+  .mobile-profile-hub .more-profile{padding:4px 0 20px;margin:0 0 8px;border-bottom:1px solid #303030}
+  .mobile-profile-hub .more-profile>.btn{margin-left:auto;min-width:68px}
+  .mobile-profile-section{margin-top:22px}
+  .mobile-profile-label{display:block;margin:0 0 9px 2px;font-size:9px;font-weight:700;letter-spacing:1.2px;color:#777}
+  .mobile-profile-menu{gap:6px}
+  .mobile-profile-menu button{min-height:52px;padding:13px 14px;background:#171717;border-color:#303030}
+  .mobile-profile-menu button span{font-size:13px;font-weight:560}
+  .mobile-profile-menu button small{display:none!important}
+  .mobile-profile-menu button>.icon:first-child{width:19px;height:19px}
+  .mobile-profile-menu button>.icon:last-child{width:15px;height:15px}
+}
