@@ -4,7 +4,7 @@ Interface update 4. Backup ledger format remains version 2.
 
 A personal dashboard for everyday money, investments, trading results and loans.
 Uses your supplied SVG logo, your exact gold tick PNG, and the palette
-#0C0E09 / #141414 / #FCFF1A. The badge is decorative, not identity verification.
+#0C0E09 / #202020 / #FCFF1A. The badge is decorative, not identity verification.
 
 ## New in this update
 
@@ -75,7 +75,7 @@ audit, a banking system or a guarantee of uninterrupted backup service. Keep
 independent private JSON downloads and monitor scheduler/database health.
 
 
-### V5 additions
+### V6 additions
 - Assets name and new Deep Charcoal / Signal Blue / Cloud Mist / Pure White palette.
 - Clickable profile with upload, phone camera capture and display controls.
 - Refined total-value and net-worth summary hierarchy.

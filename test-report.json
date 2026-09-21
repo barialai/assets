@@ -1,5 +1,5 @@
 {
-  "release": "Assets interface v5; ledger schema v2",
+  "release": "Assets interface v6; ledger schema v2",
   "tests": 21,
   "passed": 21,
   "failed": 0,

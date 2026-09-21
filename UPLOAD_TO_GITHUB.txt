@@ -1,0 +1,9 @@
+ASSETS V6 UPDATE
+
+1. Open this folder.
+2. Select the CONTENTS of this folder (not the folder itself).
+3. In GitHub -> barialai/assets -> Add file -> Upload files.
+4. Drag the selected contents into the repository root.
+5. Commit to main. Vercel will redeploy automatically.
+
+This update keeps the existing Supabase/Vercel backend configuration.

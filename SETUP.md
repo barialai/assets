@@ -1,4 +1,4 @@
-# Assets v5 - Turn on private sync and daily backups
+# Assets v6 - Turn on private sync and daily backups
 
 ## What works immediately, and what needs setup
 
